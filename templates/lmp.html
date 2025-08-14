@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+
+<head>
+    <meta charset="UTF-8">
+    <title>LMP 历史价格查询</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            padding: 32px 24px;
+        }
+
+        h2 {
+            text-align: center;
+        }
+
+        #date-input {
+            display: block;
+            margin: 20px auto 10px auto;
+            font-size: 16px;
+            padding: 4px 8px;
+        }
+
+        #query-btn {
+            display: block;
+            margin: 0 auto 24px auto;
+            padding: 8px 24px;
+            font-size: 16px;
+        }
+
+        #chart-container {
+            width: 100%;
+            min-height: 400px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>LMP 历史价格查询</h2>
+        <label for="location-select" style="display:block;text-align:center;margin-bottom:8px;">选择地区：</label>
+        <select id="location-select"
+            style="display:block;margin:0 auto 10px auto;font-size:16px;padding:4px 8px;"></select>
+        <input type="date" id="date-input" max="">
+        <button id="query-btn">查看数据</button>
+        <div id="chart-container">
+            <canvas id="lmp-history-chart"></canvas>
+        </div>
+    </div>
+    <script>
+        // 设置日期选择器最大值为今天
+        document.getElementById('date-input').max = new Date().toISOString().split('T')[0];
+
+        // 动态加载地区列表
+        async function loadLocations() {
+            const resp = await fetch('/api/locations');
+            const data = await resp.json();
+            const select = document.getElementById('location-select');
+            select.innerHTML = '';
+            if (data.locations && data.locations.length > 0) {
+                data.locations.forEach(loc => {
+                    const option = document.createElement('option');
+                    option.value = loc;
+                    option.textContent = loc;
+                    select.appendChild(option);
+                });
+            }
+        }
+        loadLocations();
+
+        let chart = null;
+
+        document.getElementById('query-btn').onclick = async function () {
+            const date = document.getElementById('date-input').value;
+            const location = document.getElementById('location-select').value;
+            if (!date) {
+                alert('请选择日期');
+                return;
+            }
+            if (!location) {
+                alert('请选择地区');
+                return;
+            }
+            this.disabled = true;
+            this.textContent = '加载中...';
+            try {
+                const resp = await fetch(`/api/get_history_lmp?date=${date}&location=${encodeURIComponent(location)}`);
+                const data = await resp.json();
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    renderChart(data.timestamps, data.lmp_values, date, location);
+                }
+            } catch (e) {
+                alert('获取数据失败');
+            }
+            this.disabled = false;
+            this.textContent = '查看数据';
+        };
+
+        function renderChart(labels, values, date) {
+            const ctx = document.getElementById('lmp-history-chart').getContext('2d');
+            if (chart) {
+                chart.data.labels = labels;
+                chart.data.datasets[0].data = values;
+                chart.options.plugins.title.text = `LMP 历史价格（${date}）`;
+                chart.update();
+            } else {
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'LMP 价格',
+                            data: values,
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                            fill: true,
+                            tension: 0.2,
+                            pointRadius: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: true },
+                            title: {
+                                display: true,
+                                text: `LMP 历史价格（${date}）`
+                            }
+                        },
+                        scales: {
+                            x: { title: { display: true, text: '时间' } },
+                            y: {
+                                title: { display: true, text: 'LMP 价格' },
+                                beginAtZero: true  // 固定纵轴起点为0
+                            }
+                        }
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+
+</html>

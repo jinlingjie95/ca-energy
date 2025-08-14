@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+
+<head>
+    <meta charset="UTF-8">
+    <title>电力负荷数据</title>
+    <style>
+        #refresh-btn,
+        #history-btn {
+            display: block;
+            margin: 20px auto;
+            padding: 8px 24px;
+            font-size: 16px;
+        }
+
+        #latest-load-chart-container,
+        #history-load-chart-container {
+            width: 80%;
+            max-width: 900px;
+            margin: 30px auto;
+        }
+
+        .section-title {
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        #date-input {
+            display: block;
+            margin: 10px auto;
+            font-size: 16px;
+            padding: 4px 8px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <h2 style="text-align:center;">实时负荷数据</h2>
+    <button id="refresh-btn">刷新</button>
+    <div id="latest-load-chart-container">
+        <canvas id="latest-load-chart"></canvas>
+    </div>
+
+    <h2 class="section-title">历史负荷数据</h2>
+    <input type="date" id="date-input" max="">
+    <button id="history-btn">查看</button>
+    <div id="history-load-chart-container">
+        <canvas id="history-load-chart"></canvas>
+    </div>
+
+  <!-- 新增：历史负荷预测数据板块 -->
+    <h2 class="section-title">历史负荷预测数据</h2>
+    <div style="width:80%;max-width:900px;margin:30px auto;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <label for="forecast-date">选择日期：</label>
+            <input type="date" id="forecast-date" max="">
+            <button class="forecast-btn" data-option="5min">5分钟预测</button>
+            <button class="forecast-btn" data-option="15min">15分钟预测</button>
+            <button class="forecast-btn" data-option="hourly">每小时预测</button>
+        </div>
+        <div id="forecast-chart-container" style="margin-top:20px;">
+            <canvas id="forecast-chart"></canvas>
+        </div>
+    </div>
+    
+
+    <script>
+        let chart = null;
+        let historyChart = null;
+
+        // 设置日期选择器最大值为今天
+        document.getElementById('date-input').max = new Date().toISOString().split('T')[0];
+
+        // 设置历史负荷预测日期选择器最大值为今天
+        document.getElementById('forecast-date').max = new Date().toISOString().split('T')[0];
+        let forecastChart = null;
+
+        // 生成24小时时间标签
+        function generate24HourLabels() {
+            const labels = [];
+            for (let h = 0; h < 24; h++) {
+                labels.push(h.toString().padStart(2, '0') + ':00');
+            }
+            return labels;
+        }
+
+        // 最新数据折线图
+        async function fetchAndRender() {
+            const btn = document.getElementById('refresh-btn');
+            btn.disabled = true;
+            btn.textContent = '加载中...';
+            try {
+                const resp = await fetch('/api/load/get_latest_date');
+                const data = await resp.json();
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    // 横坐标固定24小时，数据点用原始时间戳和原始数据
+                    renderChart(generate24HourLabels(), data.timestamps, data.load_values);
+                }
+            } catch (e) {
+                alert('获取数据失败');
+            }
+            btn.disabled = false;
+            btn.textContent = '刷新最新数据';
+        }
+
+
+        // 横坐标固定24小时，数据点按原始时间戳绘制
+        function renderChart(hourLabels, timestamps, values) {
+            const ctx = document.getElementById('latest-load-chart').getContext('2d');
+            const dataPoints = timestamps.map((t, i) => {
+                // 取小时和分钟，转为分钟数
+                let h, m;
+                if (t.length >= 16) { // "YYYY-MM-DD HH:MM:SS"
+                    h = parseInt(t.slice(-8, -6));
+                    m = parseInt(t.slice(-5, -3));
+                } else { // "HH:MM"
+                    h = parseInt(t.slice(0, 2));
+                    m = parseInt(t.slice(3, 5));
+                }
+                return { x: h + m / 60, y: values[i] };
+            });
+
+            if (chart) {
+                chart.data = {
+                    labels: hourLabels,
+                    datasets: [{
+                        label: '负荷值',
+                        data: dataPoints,
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: 2,
+                        spanGaps: true
+                    }]
+                };
+                chart.options.scales.x = {
+                    type: 'linear',
+                    min: 0,
+                    max: 23.99,
+                    title: { display: true, text: '时间（小时）' },
+                    ticks: {
+                        callback: function (value) {
+                            const h = Math.floor(value);
+                            const m = Math.round((value - h) * 60);
+                            return h.toString().padStart(2, '0') + ':' + m.toString().padStart(2, '0');
+                        },
+                        stepSize: 1
+                    }
+                };
+                chart.update();
+            } else {
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: hourLabels,
+                        datasets: [{
+                            label: '负荷值',
+                            data: dataPoints,
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            fill: true,
+                            tension: 0.2,
+                            pointRadius: 2,
+                            spanGaps: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: true }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                min: 0,
+                                max: 23.99,
+                                title: { display: true, text: '时间（小时）' },
+                                ticks: {
+                                    callback: function (value) {
+                                        const h = Math.floor(value);
+                                        const m = Math.round((value - h) * 60);
+                                        return h.toString().padStart(2, '0') + ':' + m.toString().padStart(2, '0');
+                                    },
+                                    stepSize: 1
+                                }
+                            },
+                            y: {
+                                title: { display: true, text: '负荷值' },
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // 历史数据折线图
+        async function fetchAndRenderHistory() {
+            const btn = document.getElementById('history-btn');
+            const date = document.getElementById('date-input').value;
+            if (!date) {
+                alert('请选择日期');
+                return;
+            }
+            btn.disabled = true;
+            btn.textContent = '加载中...';
+            try {
+                const resp = await fetch(`/api/load/get_history_date?date=${date}`);
+                const data = await resp.json();
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    renderHistoryChart(data.timestamps, data.load_values, date);
+                }
+            } catch (e) {
+                alert('获取数据失败');
+            }
+            btn.disabled = false;
+            btn.textContent = '查看数据';
+        }
+
+        function renderHistoryChart(labels, values, date) {
+            const ctx = document.getElementById('history-load-chart').getContext('2d');
+            if (historyChart) {
+                historyChart.data.labels = labels;
+                historyChart.data.datasets[0].data = values;
+                historyChart.options.plugins.title.text = `历史负荷数据（${date}）`;
+                historyChart.update();
+            } else {
+                historyChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '负荷值',
+                            data: values,
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                            fill: true,
+                            tension: 0.2,
+                            pointRadius: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: true },
+                            title: {
+                                display: true,
+                                text: `历史负荷数据（${date}）`
+                            }
+                        },
+                        scales: {
+                            x: { title: { display: true, text: '时间' } },
+                            y: {
+                                title: { display: true, text: '负荷值' },
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // 历史负荷预测数据获取与绘制
+        async function fetchAndRenderForecast(option) {
+            const date = document.getElementById('forecast-date').value;
+            if (!date) {
+                alert('请选择日期');
+                return;
+            }
+            // 按钮禁用
+            document.querySelectorAll('.forecast-btn').forEach(btn => btn.disabled = true);
+            try {
+                const resp = await fetch(`/api/load/get_load_forecast?date=${date}&option=${option}`);
+                const data = await resp.json();
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    renderForecastChart(data.timestamps, data.load_forecast_values, date, option);
+                }
+            } catch (e) {
+                alert('获取预测数据失败');
+            }
+            document.querySelectorAll('.forecast-btn').forEach(btn => btn.disabled = false);
+        }
+
+        function renderForecastChart(labels, values, date, option) {
+            const ctx = document.getElementById('forecast-chart').getContext('2d');
+            const optionMap = {
+                '5min': '5分钟预测',
+                '15min': '15分钟预测',
+                'hourly': '每小时预测'
+            };
+            if (forecastChart) {
+                forecastChart.data.labels = labels;
+                forecastChart.data.datasets[0].data = values;
+                forecastChart.options.plugins.title.text = `历史负荷预测数据（${date}，${optionMap[option] || option}）`;
+                forecastChart.update();
+            } else {
+                forecastChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '预测负荷值',
+                            data: values,
+                            borderColor: 'rgba(255, 159, 64, 1)',
+                            backgroundColor: 'rgba(255, 159, 64, 0.1)',
+                            fill: true,
+                            tension: 0.2,
+                            pointRadius: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: true },
+                            title: {
+                                display: true,
+                                text: `历史负荷预测数据（${date}，${optionMap[option] || option}）`
+                            }
+                        },
+                        scales: {
+                            x: { title: { display: true, text: '时间' } },
+                            y: {
+                                title: { display: true, text: '预测负荷值' },
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        document.getElementById('refresh-btn').onclick = fetchAndRender;
+        document.getElementById('history-btn').onclick = fetchAndRenderHistory;
+
+        document.querySelectorAll('.forecast-btn').forEach(btn => {
+            btn.onclick = () => fetchAndRenderForecast(btn.getAttribute('data-option'));
+        });
+    </script>
+</body>
+
+</html>
