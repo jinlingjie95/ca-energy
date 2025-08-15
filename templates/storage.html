@@ -1,0 +1,184 @@
+<html lang="zh-cn">
+
+<head>
+    <meta charset="UTF-8">
+    <title>存储数据</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+</head>
+
+<body>
+    <div class="card">
+        <div class="card-header">
+            实时存储数据
+            <button id="refresh-storage-btn" class="btn btn-primary btn-sm" style="float:right;">更新数据</button>
+        </div>
+        <div class="card-body">
+            <div id="storage-chart-container" style="width: 100%; max-width: 900px; margin: 0 auto;">
+                <canvas id="storage-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top:40px;">
+        <div class="card-header">
+            历史储能数据
+            <input type="date" id="history-date-input" style="margin-left:20px;">
+            <button id="history-storage-btn" class="btn btn-secondary btn-sm" style="margin-left:10px;">查看</button>
+        </div>
+        <div class="card-body">
+            <div id="history-storage-chart-container" style="width: 100%; max-width: 900px; margin: 0 auto;">
+                <canvas id="history-storage-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let storageChart = null;
+
+        function fetchAndDrawStorage() {
+            const btn = document.getElementById('refresh-storage-btn');
+            btn.disabled = true;
+            btn.textContent = '加载中...';
+            $.getJSON('/api/storage/get_latest_storage', function (res) {
+                if (res.error) {
+                    alert(res.error);
+                    btn.disabled = false;
+                    btn.textContent = '更新数据';
+                    return;
+                }
+                renderStorageChart(res.timestamps, res.storage_values);
+                btn.disabled = false;
+                btn.textContent = '更新数据';
+            }).fail(function (xhr) {
+                alert('获取数据失败: ' + (xhr.responseJSON ? xhr.responseJSON.error : '未知错误'));
+                btn.disabled = false;
+                btn.textContent = '更新数据';
+            });
+        }
+
+        function renderStorageChart(labels, values) {
+            const ctx = document.getElementById('storage-chart').getContext('2d');
+            if (storageChart) {
+                storageChart.data.labels = labels;
+                storageChart.data.datasets[0].data = values;
+                storageChart.update();
+            } else {
+                storageChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '储能(MW)',
+                            data: values,
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                            fill: true,
+                            tension: 0.2,
+                            pointRadius: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: true },
+                            title: {
+                                display: true,
+                                text: '最新储能数据'
+                            }
+                        },
+                        scales: {
+                            x: { title: { display: true, text: '时间' } },
+                            y: {
+                                title: { display: true, text: '储能(MW)' },
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        let historyStorageChart = null;
+
+        // 设置日期选择器最大值为今天
+        document.getElementById('history-date-input').max = new Date().toISOString().split('T')[0];
+
+        function fetchAndDrawHistoryStorage() {
+            const btn = document.getElementById('history-storage-btn');
+            const date = document.getElementById('history-date-input').value;
+            if (!date) {
+                alert('请选择日期');
+                return;
+            }
+            btn.disabled = true;
+            btn.textContent = '加载中...';
+            $.getJSON('/api/storage/get_history_storage?date=' + date, function (res) {
+                if (res.error) {
+                    alert(res.error);
+                    btn.disabled = false;
+                    btn.textContent = '查看';
+                    return;
+                }
+                renderHistoryStorageChart(res.timestamps, res.storage_values, date);
+                btn.disabled = false;
+                btn.textContent = '查看';
+            }).fail(function (xhr) {
+                alert('获取历史储能数据失败: ' + (xhr.responseJSON ? xhr.responseJSON.error : '未知错误'));
+                btn.disabled = false;
+                btn.textContent = '查看';
+            });
+        }
+
+        function renderHistoryStorageChart(labels, values, date) {
+            const ctx = document.getElementById('history-storage-chart').getContext('2d');
+            if (historyStorageChart) {
+                historyStorageChart.data.labels = labels;
+                historyStorageChart.data.datasets[0].data = values;
+                historyStorageChart.options.plugins.title.text = '历史储能数据（' + date + '）';
+                historyStorageChart.update();
+            } else {
+                historyStorageChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '储能(MW)',
+                            data: values,
+                            borderColor: 'rgba(153, 102, 255, 1)',
+                            backgroundColor: 'rgba(153, 102, 255, 0.1)',
+                            fill: true,
+                            tension: 0.2,
+                            pointRadius: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: true },
+                            title: {
+                                display: true,
+                                text: '历史储能数据（' + date + '）'
+                            }
+                        },
+                        scales: {
+                            x: { title: { display: true, text: '时间' } },
+                            y: {
+                                title: { display: true, text: '储能(MW)' },
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // 按钮点击刷新
+        $('#refresh-storage-btn').click(fetchAndDrawStorage);
+
+        // 按钮点击事件
+        $('#history-storage-btn').click(fetchAndDrawHistoryStorage);
+    </script>
+</body>
+
+</html>

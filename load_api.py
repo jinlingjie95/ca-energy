@@ -59,17 +59,21 @@ def get_load_forecast():
             date = datetime.now().strftime('%Y-%m-%d')
         
         if option == 'hourly':
-            load_forecast_df = caiso.get_load_forecast(date)
+            load_forecast_df = caiso.get_load_forecast_day_ahead(date)
         elif option == '5min':
             load_forecast_df = caiso.get_load_forecast_5_min(date)
         elif option == '15min':
             load_forecast_df = caiso.get_load_forecast_15_min(date)
         else:
-            load_forecast_df = caiso.get_load_forecast(date)
+            load_forecast_df = caiso.get_load_forecast_day_ahead(date)
           
         if load_forecast_df is None or load_forecast_df.empty:
             logging.warning("No load forecast data available.")
             return jsonify({"error": "No load forecast data available"}), 503
+        
+        # Filter for CA ISO-TAC area
+        load_forecast_df = load_forecast_df[load_forecast_df["TAC Area Name"] == "CA ISO-TAC"]
+        load_forecast_df = load_forecast_df.drop(columns=["TAC Area Name"])
         
         if 'Time' not in load_forecast_df.columns:
             # 如果没有'Time'列，则用'Interval Start'列重命名为'Time'
@@ -88,4 +92,57 @@ def get_load_forecast():
     except Exception as e:
         logging.error(f"Error fetching load forecast data: {e}")
         return jsonify({"error": str(e)}), 500
-    
+
+
+@load_api.route('/api/load/get_all_load_forecast')
+def get_all_load_forecast():
+    """Fetch all load forecast data from CAISO."""
+    try:
+        logging.info("Fetching load forecast data from CAISO...")
+        date = request.args.get('date')
+        option = request.args.get('option')  # 'latest' or specific date
+        if date is None:
+            date = datetime.now().strftime('%Y-%m-%d')
+        
+        if option == 'hourly':
+            load_forecast_df = caiso.get_load_forecast_day_ahead(date)
+        elif option == '5min':
+            load_forecast_df = caiso.get_load_forecast_5_min(date)
+        elif option == '15min':
+            load_forecast_df = caiso.get_load_forecast_15_min(date)
+        else:
+            load_forecast_df = caiso.get_load_forecast_day_ahead(date)
+          
+        if load_forecast_df is None or load_forecast_df.empty:
+            logging.warning("No load forecast data available.")
+            return jsonify({"error": "No load forecast data available"}), 503
+        
+        # 检查是否有 TAC Area Name 字段
+        if "TAC Area Name" not in load_forecast_df.columns:
+            logging.warning("No 'TAC Area Name' column in forecast data.")
+            return jsonify({"error": "No 'TAC Area Name' column in forecast data"}), 500
+
+        if 'Time' not in load_forecast_df.columns:
+            # 如果没有'Time'列，则用'Interval Start'列重命名为'Time'
+            if 'Interval Start' in load_forecast_df.columns:
+                load_forecast_df['Time'] = load_forecast_df['Interval Start']
+            else:
+                logging.warning("No 'Time' or 'Interval Start' column in forecast data.")
+                return jsonify({"error": "No valid time column in forecast data"}), 500
+
+        load_forecast_df['Time'] = pd.to_datetime(load_forecast_df['Time'])
+
+        result = {}
+        for area_name, group in load_forecast_df.groupby("TAC Area Name"):
+            group = group.copy()
+
+            result[area_name] = {
+                "timestamps": group['Time'].dt.strftime('%H:%M').tolist(),
+                "load_forecast_values": group['Load Forecast'].tolist()
+            }
+        if not result:
+            return jsonify({"error": "No valid data after grouping"}), 500
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"Error fetching load forecast data: {e}")
+        return jsonify({"error": str(e)}), 500

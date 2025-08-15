@@ -6,7 +6,8 @@
     <title>电力负荷数据</title>
     <style>
         #refresh-btn,
-        #history-btn {
+        #history-btn,
+        .forecast-btn {
             display: block;
             margin: 20px auto;
             padding: 8px 24px;
@@ -14,7 +15,8 @@
         }
 
         #latest-load-chart-container,
-        #history-load-chart-container {
+        #history-load-chart-container,
+        #all-region-forecast-chart-container {
             width: 80%;
             max-width: 900px;
             margin: 30px auto;
@@ -25,7 +27,9 @@
             margin-top: 40px;
         }
 
-        #date-input {
+        #date-input,
+        #forecast-date,
+        #all-region-forecast-date {
             display: block;
             margin: 10px auto;
             font-size: 16px;
@@ -49,7 +53,6 @@
         <canvas id="history-load-chart"></canvas>
     </div>
 
-  <!-- 新增：历史负荷预测数据板块 -->
     <h2 class="section-title">历史负荷预测数据</h2>
     <div style="width:80%;max-width:900px;margin:30px auto;">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -63,18 +66,32 @@
             <canvas id="forecast-chart"></canvas>
         </div>
     </div>
-    
+
+    <!-- 新增：全区域历史负荷预测数据板块 -->
+    <h2 class="section-title">全区域历史负荷预测数据</h2>
+    <div style="width:80%;max-width:900px;margin:30px auto;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <label for="all-region-forecast-date">选择日期：</label>
+            <input type="date" id="all-region-forecast-date" max="">
+            <button class="all-region-forecast-btn" data-option="5min">5分钟预测</button>
+            <button class="all-region-forecast-btn" data-option="15min">15分钟预测</button>
+            <button class="all-region-forecast-btn" data-option="hourly">每小时预测</button>
+        </div>
+        <div id="all-region-forecast-chart-container" style="margin-top:20px;">
+            <canvas id="all-region-forecast-chart"></canvas>
+        </div>
+    </div>
 
     <script>
         let chart = null;
         let historyChart = null;
+        let forecastChart = null;
+        let allRegionForecastChart = null;
 
         // 设置日期选择器最大值为今天
         document.getElementById('date-input').max = new Date().toISOString().split('T')[0];
-
-        // 设置历史负荷预测日期选择器最大值为今天
         document.getElementById('forecast-date').max = new Date().toISOString().split('T')[0];
-        let forecastChart = null;
+        document.getElementById('all-region-forecast-date').max = new Date().toISOString().split('T')[0];
 
         // 生成24小时时间标签
         function generate24HourLabels() {
@@ -96,7 +113,6 @@
                 if (data.error) {
                     alert(data.error);
                 } else {
-                    // 横坐标固定24小时，数据点用原始时间戳和原始数据
                     renderChart(generate24HourLabels(), data.timestamps, data.load_values);
                 }
             } catch (e) {
@@ -106,17 +122,15 @@
             btn.textContent = '刷新最新数据';
         }
 
-
         // 横坐标固定24小时，数据点按原始时间戳绘制
         function renderChart(hourLabels, timestamps, values) {
             const ctx = document.getElementById('latest-load-chart').getContext('2d');
             const dataPoints = timestamps.map((t, i) => {
-                // 取小时和分钟，转为分钟数
                 let h, m;
-                if (t.length >= 16) { // "YYYY-MM-DD HH:MM:SS"
+                if (t.length >= 16) {
                     h = parseInt(t.slice(-8, -6));
                     m = parseInt(t.slice(-5, -3));
-                } else { // "HH:MM"
+                } else {
                     h = parseInt(t.slice(0, 2));
                     m = parseInt(t.slice(3, 5));
                 }
@@ -136,20 +150,6 @@
                         pointRadius: 2,
                         spanGaps: true
                     }]
-                };
-                chart.options.scales.x = {
-                    type: 'linear',
-                    min: 0,
-                    max: 23.99,
-                    title: { display: true, text: '时间（小时）' },
-                    ticks: {
-                        callback: function (value) {
-                            const h = Math.floor(value);
-                            const m = Math.round((value - h) * 60);
-                            return h.toString().padStart(2, '0') + ':' + m.toString().padStart(2, '0');
-                        },
-                        stepSize: 1
-                    }
                 };
                 chart.update();
             } else {
@@ -273,7 +273,6 @@
                 alert('请选择日期');
                 return;
             }
-            // 按钮禁用
             document.querySelectorAll('.forecast-btn').forEach(btn => btn.disabled = true);
             try {
                 const resp = await fetch(`/api/load/get_load_forecast?date=${date}&option=${option}`);
@@ -337,11 +336,80 @@
             }
         }
 
+        // 全区域历史负荷预测数据获取与绘制
+        async function fetchAndRenderAllRegionForecast(option) {
+            const date = document.getElementById('all-region-forecast-date').value;
+            if (!date) {
+                alert('请选择日期');
+                return;
+            }
+            document.querySelectorAll('.all-region-forecast-btn').forEach(btn => btn.disabled = true);
+            try {
+                const resp = await fetch(`/api/load/get_all_load_forecast?date=${date}&option=${option}`);
+                const data = await resp.json();
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    renderAllRegionForecastChart(data);
+                }
+            } catch (e) {
+                alert('获取全区域预测数据失败');
+            }
+            document.querySelectorAll('.all-region-forecast-btn').forEach(btn => btn.disabled = false);
+        }
+
+        function renderAllRegionForecastChart(data) {
+            const ctx = document.getElementById('all-region-forecast-chart').getContext('2d');
+            const datasets = Object.keys(data).map((areaName, index) => ({
+                label: areaName,
+                data: data[areaName].load_forecast_values,
+                borderColor: `hsl(${index * 60}, 100%, 50%)`, // 使用不同颜色
+                backgroundColor: `hsl(${index * 60}, 100%, 80%)`,
+                fill: true,
+                tension: 0.2,
+                pointRadius: 2
+            }));
+
+            if (allRegionForecastChart) {
+                allRegionForecastChart.data.datasets = datasets;
+                allRegionForecastChart.update();
+            } else {
+                allRegionForecastChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data[Object.keys(data)[0]].timestamps,
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: true },
+                            title: {
+                                display: true,
+                                text: '全区域历史负荷预测数据'
+                            }
+                        },
+                        scales: {
+                            x: { title: { display: true, text: '时间' } },
+                            y: {
+                                title: { display: true, text: '预测负荷值' },
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
         document.getElementById('refresh-btn').onclick = fetchAndRender;
         document.getElementById('history-btn').onclick = fetchAndRenderHistory;
 
         document.querySelectorAll('.forecast-btn').forEach(btn => {
             btn.onclick = () => fetchAndRenderForecast(btn.getAttribute('data-option'));
+        });
+
+        document.querySelectorAll('.all-region-forecast-btn').forEach(btn => {
+            btn.onclick = () => fetchAndRenderAllRegionForecast(btn.getAttribute('data-option'));
         });
     </script>
 </body>
