@@ -1,0 +1,63 @@
+# Windows 系统文件
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# VS Code 编辑器配置
+.vscode/
+.history/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 日志文件
+*.log
+
+# 环境变量文件
+.env
+.env.*.local
+
+# 编译输出
+dist/
+build/
+out/
+coverage/
+
+# 临时文件
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Mac 系统文件（有时会拷贝到 Windows）
+.DS_Store
+
+# Git 忽略自身
+.git/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+
+# 其他常见 IDE 文件
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# 压缩包
+*.zip
+*.rar
+*.7z
+
+# 图片缓存
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# 备份文件
