@@ -1,60 +1,8 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CAISO 电力市场仪表板</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body {
-            font-family: sans-serif;
-            background-color: #f4f4f9;
-            color: #333;
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            max-width: 1200px;
-            margin: auto;
-        }
-        @media (max-width: 768px) {
-            .container {
-                grid-template-columns: 1fr;
-            }
-        }
-        .dashboard-card {
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        h1, h2 {
-            text-align: center;
-        }
-        #loadChart, #fuelMixChart {
-            max-height: 400px;
-        }
-    </style>
-</head>
-<body>
-    <nav style="text-align:center; margin-bottom: 24px;">
-        <a href="/" style="margin:0 16px;">首页</a>
-        <a href="/load" style="margin:0 16px;">电网负荷详情</a>
-        <a href="/lmp" style="margin:0 16px;">电网电价详情</a>
-        <a href="/storage" style="margin:0 16px;">储能详情</a>
-    </nav>
-    <h1>CAISO 仪表板</h1>
-    <div class="container">
-        <div class="dashboard-card">
-            <h2>电网负荷</h2>
-        </div>
-        <div class="dashboard-card">
-            <h2>实时燃料组合</h2>
-        </div>
-    </div>
+{% extends "layout.html" %}
 
-</body>
-</html>
+{% block content %}
+    <h1>欢迎来到电力数据展示系统</h1>
+    <p>这是一个使用 Flask 和 gridstatus 构建的演示网站。</p>
+    <p>请点击下方链接或使用导航栏查看实时电力负荷数据：</p>
+    <a href="{{ url_for('power_page') }}" class="button-link">查看实时电力负荷图表</a>
+{% endblock %}

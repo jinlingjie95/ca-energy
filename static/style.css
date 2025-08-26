@@ -1,0 +1,89 @@
+/* --- General Body & Container --- */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: #f4f4f9;
+    color: #333;
+    margin: 0;
+    padding-top: 60px; /* 为固定的导航栏留出空间 */
+}
+
+.container {
+    background-color: #fff;
+    padding: 2rem;
+    margin: 1rem auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    width: 90%;
+    max-width: 1200px;
+}
+
+h1 {
+    text-align: center;
+    color: #444;
+    margin-bottom: 1.5rem;
+}
+
+/* --- Navbar --- */
+.navbar {
+    background-color: #007bff;
+    padding: 0 2rem;
+    position: fixed;
+    top: 0;
+    width: 100%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    height: 60px;
+    z-index: 1000;
+}
+
+.nav-brand {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: white;
+    text-decoration: none;
+    margin-right: 2rem;
+}
+
+.nav-link {
+    color: white;
+    text-decoration: none;
+    font-size: 1rem;
+    padding: 1rem;
+    transition: background-color 0.3s;
+}
+
+.nav-link:hover {
+    background-color: #0056b3;
+}
+
+/* --- Index Page Specific --- */
+.button-link {
+    display: inline-block;
+    background-color: #007bff;
+    color: white;
+    padding: 10px 20px;
+    text-decoration: none;
+    border-radius: 5px;
+    margin-top: 1rem;
+    transition: background-color 0.3s;
+}
+
+.button-link:hover {
+    background-color: #0056b3;
+}
+
+
+/* --- Power Page Specific --- */
+#status-message {
+    text-align: center;
+    font-style: italic;
+    color: #555;
+    margin-bottom: 1rem;
+}
+
+.chart-container {
+    position: relative;
+    height: 60vh; /* 图表高度为视口高度的60% */
+    width: 100%;
+}
