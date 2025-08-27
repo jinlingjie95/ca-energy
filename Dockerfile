@@ -41,4 +41,4 @@ EXPOSE 5000
 # --workers 3: 启动3个工作进程处理请求 (可根据服务器CPU核心数调整)
 # --bind 0.0.0.0:5000: 监听所有网络接口的 5000 端口
 # app:app: 第一个 app 指的是 app.py 文件，第二个 app 指的是 Flask 的实例对象 (app = Flask(__name__))
-CMD ["gunicorn", "--workers", "3", "--bind", "0.0.0.0:5000", "app:app"]
+CMD ["gunicorn", "--workers", "3", "--bind", "0.0.0.0:5000", "--timeout", "300", "app:app"]
