@@ -33,6 +33,7 @@ coverage/
 *.temp
 *.swp
 *.swo
+tmp/
 
 # Mac 系统文件（有时会拷贝到 Windows）
 .DS_Store
