@@ -1,19 +1,23 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title or '电力数据监控' }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body>
     <nav class="navbar">
-        <a href="{{ url_for('index') }}" class="nav-brand">主页</a>
-        <a href="{{ url_for('ca_page') }}" class="nav-link">查看加州电力数据</a>
+        <a href="{{ url_for('main.index') }}" class="nav-brand">主页</a>
+        <a href="{{ url_for('main.ca_page') }}" class="nav-link">查看加州电力数据</a>
     </nav>
     <div class="container">
         {% block content %}{% endblock %}
     </div>
 </body>
+
 </html>

@@ -1,58 +1,59 @@
-# ca-energy/README.md
+# CA Energy Data Platform
 
-# CA Energy Load Forecasting
+这是一个使用 Flask 和 GridStatus 构建的加州能源数据可视化平台。项目经过重构，采用了应用工厂和蓝图模式，具有良好的可扩展性。
 
-This project provides a web application for visualizing real-time and historical load data from the California Independent System Operator (CAISO). It includes features for fetching and displaying load forecasts for different time intervals and regions.
+## 项目结构
 
-## Project Structure
+   /ca-energy-refactored/
+   |-- app/
+   |   |-- init.py             # 应用工厂
+   |   |-- static/
+   |   |-- templates/
+   |   |-- main/                   # 主模块 (UI路由)
+   |   -- api/                    # API模块 |       -- ca/                 # 加州API蓝图
+   |
+   |-- logs/                       # 日志文件夹
+   |-- run.py                      # 应用启动脚本
+   |-- config.py                   # 配置文件
+   |-- requirements.txt
+   |-- Dockerfile
+   |-- README.md
 
-- **templates/load.html**: Contains the HTML structure for the front-end interface. It includes sections for displaying real-time load data, historical load data, and a new section for "全区域历史负荷预测数据" (All-Region Historical Load Forecast Data). This section allows users to select a date and fetch forecast data for different intervals (5 minutes, 15 minutes, hourly).
+## 安装与启动
 
-- **load_api.py**: Implements the Flask API endpoints for fetching load data and forecasts from CAISO. It handles requests for the latest load data, historical load data, and load forecasts, including the new functionality for all-region historical load forecast data.
+1.  **克隆仓库**
+    ```bash
+    git clone <your-repo-url>
+    cd ca-energy-refactored
+    ```
 
-- **app.py**: The main entry point for the Flask application. It initializes the app and registers the blueprint for the load API. This file may include new routes or configurations related to the forecasting functionality.
+2.  **创建虚拟环境并安装依赖**
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # on Windows use `venv\Scripts\activate`
+    pip install -r requirements.txt
+    ```
 
-- **requirements.txt**: Lists the dependencies required for the project, including Flask and any other libraries needed for data handling and visualization.
+3.  **运行应用 (开发模式)**
+    ```bash
+    python run.py
+    ```
+    应用将在 `http://127.0.0.1:5000` 上运行。
 
-## Setup Instructions
+4.  **使用 Docker 运行 (生产模式)**
+    ```bash
+    # 构建 Docker 镜像
+    docker build -t ca-energy-app .
 
-1. Clone the repository:
-   ```
-   git clone <repository-url>
-   cd ca-energy
-   ```
+    # 运行 Docker 容器
+    docker run -p 5000:5000 ca-energy-app
+    ```
 
-2. Install the required dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
+## API 概览
 
-3. Run the application:
-   ```
-   python app.py
-   ```
+所有与加州数据相关的 API 都在 `/api/ca/` 前缀下。
 
-4. Open your web browser and navigate to `http://127.0.0.1:5000` to access the application.
-
-## Usage
-
-- **Real-time Load Data**: Click the "刷新" (Refresh) button to fetch the latest load data from CAISO.
-
-- **Historical Load Data**: Select a date using the date input and click the "查看" (View) button to fetch historical load data.
-
-- **全区域历史负荷预测数据**: In the new section, select a date and click one of the forecast buttons (5分钟预测, 15分钟预测, 每小时预测) to fetch historical load forecast data for all regions. The data will be displayed in a chart with different colors representing different data sources.
-
-## API Endpoints
-
-- `/api/load/get_latest_date`: Fetches the latest load data.
-- `/api/load/get_history_date`: Fetches historical load data for a specified date.
-- `/api/load/get_load_forecast`: Fetches load forecast data for a specified date and interval.
-- `/api/load/get_all_load_forecast`: Fetches all-region historical load forecast data for a specified date and interval.
-
-## Contributing
-
-Contributions are welcome! Please submit a pull request or open an issue for any enhancements or bug fixes.
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for more details.
+* `/api/ca/load/latest`: 获取最新负荷数据
+* `/api/ca/load/today`: 获取今日负荷数据
+* `/api/ca/load/history?date=YYYY-MM-DD`: 获取历史负荷数据
+* ... 更多请参见 `app/api/ca/routes.py`

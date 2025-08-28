@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>加州地区电力数据总览</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+    <style>
+        /* --- 页面基础和布局样式 --- */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: auto;
+        }
+
+        .main-title {
+            text-align: center;
+            font-size: 2.2em;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+
+        /* --- 卡片式布局样式 --- */
+        .card {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+            padding: 20px;
+            margin-bottom: 25px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card-title {
+            font-size: 1.5em;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #34495e;
+        }
+
+        /* --- 流式布局和栅格系统 --- */
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 25px;
+            margin-bottom: 15px;
+        }
+
+        .col {
+            flex: 1;
+            min-width: 300px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- 实时数据标签样式 --- */
+        .realtime-labels-container {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .data-label {
+            background-color: #ecf0f1;
+            padding: 15px 20px;
+            border-radius: 8px;
+            border-left: 5px solid #3498db;
+        }
+
+        .data-label h3 {
+            margin: 0 0 8px 0;
+            font-size: 1.1em;
+            color: #2c3e50;
+        }
+
+        .data-label p {
+            margin: 0;
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #2980b9;
+        }
+
+        .data-label p .time {
+            font-size: 0.7em;
+            font-weight: normal;
+            color: #7f8c8d;
+        }
+
+        /* --- 主干电网实时数据样式 --- */
+        .hub-lmp-container {
+            width: 100%;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .market-group {
+            margin-bottom: 15px;
+        }
+
+        .market-group h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+            color: #34495e;
+        }
+
+        .market-group .realtime-labels-container {
+            gap: 15px;
+        }
+
+        .market-group .data-label {
+            padding: 10px 15px;
+            border-left-width: 4px;
+        }
+
+        .market-group .data-label h3 {
+            font-size: 0.9em;
+        }
+
+        .market-group .data-label p {
+            font-size: 1.2em;
+        }
+
+        /* --- 用户控件样式 --- */
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .date-input {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+
+        .btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            background-color: #007bff;
+            color: white;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .btn:hover {
+            background-color: #0056b3;
+        }
+
+        .btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            color: #dc3545;
+            margin-top: 10px;
+            font-size: 0.9em;
+            min-height: 1.2em;
+        }
+
+        /* --- 图表容器与预测按钮的样式 --- */
+        .chart-container {
+            position: relative;
+            flex-grow: 1;
+            min-height: 400px;
+        }
+
+        .chart-buttons {
+            position: absolute;
+            top: 10px;
+            right: 45px;
+            z-index: 10;
+            display: flex;
+            gap: 8px;
+        }
+
+        .forecast-btn {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .forecast-btn.active {
+            background-color: #28a745;
+        }
+
+        .forecast-btn:disabled {
+            background-color: #e9ecef;
+            cursor: not-allowed;
+            color: #6c757d;
+        }
+
+        /* 实时和历史主干网络图表布局 */
+        #hubRealtimeLmpChartsContainer .col {
+            flex-grow: 0;
+            flex-shrink: 0;
+            flex-basis: calc(50% - 12.5px);
+        }
+
+        @media (max-width: 992px) {
+            #hubRealtimeLmpChartsContainer .col {
+                flex-basis: 100%;
+            }
+        }
+
+        /* 主干电网选择器样式 */
+        .hub-selector-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        /* --- 历史地区电价查询板块布局 --- */
+        .history-lmp-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .history-lmp-wrapper .chart-container {
+            flex: 3;
+            min-width: 400px;
+        }
+
+        .location-selector-container {
+            flex: 1;
+            min-width: 200px;
+            border-left: 1px solid #e0e0e0;
+            padding-left: 20px;
+        }
+
+        .location-selector {
+            max-height: 400px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .location-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .location-item input,
+        .location-item label {
+            cursor: pointer;
+        }
+
+        .location-item label {
+            font-size: 0.9em;
+            word-break: break-all;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1 class="main-title">加州地区电力数据总览</h1>
+
+        <div class="card">
+            <h2 class="card-title">实时数据一览</h2>
+            <div class="realtime-labels-container">
+                <div class="data-label">
+                    <h3>实时负荷 (MW)</h3>
+                    <p><span id="latestLoadValue">加载中...</span> <span class="time"> @ <span
+                                id="latestLoadTime">--:--</span></span></p>
+                </div>
+                <div class="data-label">
+                    <h3>实时储能 (MW)</h3>
+                    <p><span id="latestStorageValue">加载中...</span> <span class="time"> @ <span
+                                id="latestStorageTime">--:--</span></span></p>
+                </div>
+            </div>
+            <div id="latestHubLmpContainer" class="hub-lmp-container"></div>
+        </div>
+
+        <div class="card">
+            <div class="row">
+                <div class="col">
+                    <h2 class="card-title">今日实时负荷 (MW)</h2>
+                    <div class="chart-container"><canvas id="realtimeLoadChart"></canvas></div>
+                </div>
+                <div class="col">
+                    <h2 class="card-title">历史负荷与预测对比</h2>
+                    <div class="controls">
+                        <label for="historyLoadDateInput" style="font-weight: bold;">查询日期:</label>
+                        <input type="date" id="historyLoadDateInput" class="date-input">
+                        <button id="fetchHistoryLoadButton" class="btn">查询历史数据</button>
+                    </div>
+                    <p id="historyLoadError" class="error-message"></p>
+                    <div class="chart-container">
+                        <canvas id="historyLoadChart"></canvas>
+                        <div class="chart-buttons">
+                            <button class="forecast-btn" value="hourly">Hourly</button>
+                            <button class="forecast-btn" value="5min">5min</button>
+                            <button class="forecast-btn" value="15min">15min</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="row">
+                <div class="col">
+                    <h2 class="card-title">今日实时储能 (MW)</h2>
+                    <div class="chart-container"><canvas id="realtimeStorageChart"></canvas></div>
+                </div>
+                <div class="col">
+                    <h2 class="card-title">历史储能</h2>
+                    <div class="controls">
+                        <label for="historyStorageDateInput" style="font-weight: bold;">查询日期:</label>
+                        <input type="date" id="historyStorageDateInput" class="date-input">
+                        <button id="fetchHistoryStorageButton" class="btn">查询历史数据</button>
+                    </div>
+                    <p id="historyStorageError" class="error-message"></p>
+                    <div class="chart-container"><canvas id="historyStorageChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">主干网络实时电价</h2>
+            <div class="row" id="hubRealtimeLmpChartsContainer"></div>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">主干电网历史电价查询</h2>
+            <div class="controls">
+                <label style="font-weight: bold;">市场类型:</label>
+                <input type="radio" id="hubMarketDayAheadRadio" name="hub_history_market" value="day_ahead_hourly"
+                    checked><label for="hubMarketDayAheadRadio">日前</label>
+                <input type="radio" id="hubMarketRealTimeRadio" name="hub_history_market" value="real_time_5_min"><label
+                    for="hubMarketRealTimeRadio">实时</label>
+                <label for="hubHistoryLmpDateInput" style="font-weight: bold; margin-left: 20px;">查询日期:</label>
+                <input type="date" id="hubHistoryLmpDateInput" class="date-input">
+                <button id="fetchHubHistoryLmpButton" class="btn">查询</button>
+            </div>
+            <div id="hubSelectorContainer" class="hub-selector-container"><span style="font-weight: bold;">主干网络:</span>
+                <span>加载中...</span></div>
+            <p id="hubHistoryLmpError" class="error-message"></p>
+            <div class="chart-container"><canvas id="hubHistoryLmpChart"></canvas></div>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">地区历史电价查询</h2>
+            <div class="controls" style="margin-bottom: 20px;">
+                <label style="font-weight: bold;">市场类型:</label>
+                <input type="radio" id="nodeMarketDayAheadRadio" name="history_market" value="day_ahead_hourly"
+                    checked><label for="nodeMarketDayAheadRadio">日前</label>
+                <input type="radio" id="nodeMarketRealTimeRadio" name="history_market" value="real_time_5_min"><label
+                    for="nodeMarketRealTimeRadio">实时</label>
+                <label for="historyLmpDateInput" style="font-weight: bold; margin-left: 20px;">查询日期:</label>
+                <input type="date" id="historyLmpDateInput" class="date-input">
+                <button id="fetchHistoryLmpButton" class="btn">查询</button>
+            </div>
+            <p id="historyLmpError" class="error-message"></p>
+            <div class="history-lmp-wrapper">
+                <div class="chart-container"><canvas id="historyLmpChart"></canvas></div>
+                <div class="location-selector-container">
+                    <h3 style="margin-top:0;">选择地区</h3>
+                    <input type="text" id="locationSearchInput" class="search-input" placeholder="搜索地区...">
+                    <div id="locationSelector" class="location-selector">
+                        <p>请先查询数据...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="row">
+                <div class="col">
+                    <h2 class="card-title">今日燃料组合 (Fuel Mix)</h2>
+                    <div class="chart-container"><canvas id="todayFuelMixChart"></canvas></div>
+                </div>
+                <div class="col">
+                    <h2 class="card-title">历史燃料组合查询</h2>
+                    <div class="controls">
+                        <label for="historyFuelMixDateInput" style="font-weight: bold;">查询日期:</label>
+                        <input type="date" id="historyFuelMixDateInput" class="date-input">
+                        <button id="fetchHistoryFuelMixButton" class="btn">查询</button>
+                    </div>
+                    <p id="historyFuelMixError" class="error-message"></p>
+                    <div class="chart-container"><canvas id="historyFuelMixChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            'use strict';
+
+            // ==========================================================
+            //                   通用工具 (Utilities)
+            // ==========================================================
+            const utils = {
+                /**
+                 * 创建并返回一个 Chart.js 实例
+                 * @param {string} canvasId - Canvas 元素的 ID
+                 * @param {object} chartOptions - Chart.js 的配置对象
+                 * @returns {Chart} Chart.js 实例
+                 */
+                createChart: (canvasId, chartOptions) => {
+                    const ctx = document.getElementById(canvasId).getContext('2d');
+                    return new Chart(ctx, chartOptions);
+                },
+
+                /**
+                 * 将 API 返回的时间和值数组转换为 Chart.js 可识别的数据点格式
+                 * @param {object} apiData - API 返回的数据, 格式为 {time: ['HH:MM'], value: [number]}
+                 * @param {string} dateString - 日期字符串, YYYY-MM-DD
+                 * @returns {array} 格式为 [{x: Date, y: number}, ...]
+                 */
+                formatChartData: (apiData, dateString) => {
+                    if (!apiData || !apiData.time || !apiData.value) return [];
+                    return apiData.time.map((timeStr, index) => {
+                        const [hours, minutes] = timeStr.split(':');
+                        const date = new Date(`${dateString}T00:00:00`);
+                        date.setHours(hours, minutes, 0, 0);
+                        return { x: date, y: apiData.value[index] };
+                    });
+                },
+
+                /**
+                 * 将日期输入框的默认值设置为昨天
+                 * @param {string} inputId - 日期输入框的 ID
+                 */
+                setDefaultDateToYesterday: (inputId) => {
+                    const dateInput = document.getElementById(inputId);
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    dateInput.value = yesterday.toISOString().split('T')[0];
+                },
+
+                /**
+                 * 切换按钮的禁用和加载状态
+                 * @param {HTMLElement} button - 按钮元素
+                 * @param {boolean} isLoading - 是否正在加载
+                 * @param {string} defaultText - 按钮的默认文本
+                 */
+                toggleButtonLoading: (button, isLoading, defaultText = '查询') => {
+                    button.disabled = isLoading;
+                    button.textContent = isLoading ? '查询中...' : defaultText;
+                },
+
+                // 预定义的图表颜色列表，用于多数据集图表
+                chartColors: [
+                    'rgb(255, 99, 132)', 'rgb(54, 162, 235)', 'rgb(255, 206, 86)', 'rgb(75, 192, 192)',
+                    'rgb(153, 102, 255)', 'rgb(255, 159, 64)', 'rgb(201, 203, 207)', 'rgb(231, 84, 128)',
+                    'rgb(13, 180, 185)', 'rgb(255, 119, 0)'
+                ],
+
+                // 燃料组合颜色映射
+                fuelColors: {
+                    "Solar": "rgba(255, 206, 86, 0.7)", "Wind": "rgba(75, 192, 192, 0.7)",
+                    "Geothermal": "rgba(255, 99, 132, 0.7)", "Biomass": "rgba(139, 69, 19, 0.7)",
+                    "Biogas": "rgba(189, 183, 107, 0.7)", "Small Hydro": "rgba(173, 216, 230, 0.7)",
+                    "Coal": "rgba(105, 105, 105, 0.7)", "Nuclear": "rgba(153, 102, 255, 0.7)",
+                    "Natural Gas": "rgba(255, 159, 64, 0.7)", "Large Hydro": "rgba(54, 162, 235, 0.7)",
+                    "Batteries": "rgba(46, 204, 113, 0.7)", "Imports": "rgba(149, 165, 166, 0.7)",
+                    "Other": "rgba(211, 211, 211, 0.7)"
+                }
+            };
+
+            // API 基础 URL，与后端蓝图前缀一致
+            const API_BASE_URL = '/api/ca';
+
+            // ==========================================================
+            //              实时数据标签 (Realtime Labels)
+            // ==========================================================
+            const realtimeLabels = {
+                // 更新顶部卡片中的实时负荷和储能数据
+                updateTopLabels: async () => {
+                    try {
+                        const [loadRes, storageRes] = await Promise.all([
+                            fetch(`${API_BASE_URL}/load/latest`),
+                            fetch(`${API_BASE_URL}/storage/latest`)
+                        ]);
+                        const loadData = await loadRes.json();
+                        const storageData = await storageRes.json();
+
+                        if (loadData && !loadData.error) {
+                            document.getElementById('latestLoadValue').textContent = loadData.value.toFixed(0);
+                            document.getElementById('latestLoadTime').textContent = loadData.time;
+                        }
+                        if (storageData && !storageData.error) {
+                            document.getElementById('latestStorageValue').textContent = storageData.value.toFixed(0);
+                            document.getElementById('latestStorageTime').textContent = storageData.time;
+                        }
+                    } catch (error) {
+                        console.error('Failed to update realtime labels:', error);
+                    }
+                },
+                // 更新主干电网的实时电价标签
+                updateHubLmpLabels: async () => {
+                    const container = document.getElementById('latestHubLmpContainer');
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/lmp/trading_hubs/latest`);
+                        const data = await response.json();
+                        if (data.error) throw new Error(data.error);
+
+                        container.innerHTML = '';
+                        const markets = { day_ahead_hourly: '日前市场 (Hourly)', real_time_5_min: '实时市场 (5-Min)' };
+
+                        for (const marketId in markets) {
+                            const marketName = markets[marketId];
+                            const marketGroup = document.createElement('div');
+                            marketGroup.className = 'market-group';
+                            marketGroup.innerHTML = `<h4>${marketName}</h4>`;
+
+                            const labelsContainer = document.createElement('div');
+                            labelsContainer.className = 'realtime-labels-container';
+
+                            for (const location in data.locations) {
+                                const lmpData = data.locations[location][marketId];
+                                const dataLabel = document.createElement('div');
+                                dataLabel.className = 'data-label';
+                                let content = `<h3>${location}</h3>`;
+                                content += (lmpData && !lmpData.error)
+                                    ? `<p>${lmpData.value.toFixed(2)} <span class="time"> @ ${lmpData.time}</span></p>`
+                                    : `<p><span class="time">无数据</span></p>`;
+                                dataLabel.innerHTML = content;
+                                labelsContainer.appendChild(dataLabel);
+                            }
+                            marketGroup.appendChild(labelsContainer);
+                            container.appendChild(marketGroup);
+                        }
+                    } catch (error) {
+                        container.innerHTML = '<p style="color: red;">加载主干电网实时电价失败。</p>';
+                        console.error('Failed to update hub LMP labels:', error);
+                    }
+                },
+                init: function () {
+                    this.updateTopLabels();
+                    this.updateHubLmpLabels();
+                    setInterval(this.updateTopLabels, 300000); // 5分钟刷新
+                    setInterval(this.updateHubLmpLabels, 300000); // 5分钟刷新
+                }
+            };
+
+            // ==========================================================
+            //              电力负荷图表 (Load Charts)
+            // ==========================================================
+            const loadCharts = {
+                realtime: {
+                    chart: null,
+                    init: function () {
+                        this.chart = utils.createChart('realtimeLoadChart', {
+                            type: 'line',
+                            data: { datasets: [{ label: '实时负荷', data: [], borderColor: 'rgb(75, 192, 192)', backgroundColor: 'rgba(75, 192, 192, 0.2)', tension: 0.1, fill: true, borderWidth: 2 }] },
+                            options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'time', time: { unit: 'hour', tooltipFormat: 'HH:mm' }, title: { display: true, text: '时间' } }, y: { title: { display: true, text: '负荷 (MW)' } } } }
+                        });
+                        this.update();
+                        setInterval(() => this.update(), 300000);
+                    },
+                    update: async function () {
+                        try {
+                            const response = await fetch(`${API_BASE_URL}/load/today`);
+                            const data = await response.json();
+                            if (data.error) return;
+                            const todayStr = new Date().toISOString().split('T')[0];
+                            this.chart.data.datasets[0].data = utils.formatChartData(data, todayStr);
+                            this.chart.update('none');
+                        } catch (error) { console.error('Failed to update realtime load chart:', error); }
+                    }
+                },
+                history: {
+                    chart: null,
+                    currentDate: null,
+                    elements: {
+                        dateInput: document.getElementById('historyLoadDateInput'),
+                        fetchButton: document.getElementById('fetchHistoryLoadButton'),
+                        errorMsg: document.getElementById('historyLoadError'),
+                        forecastButtons: document.querySelectorAll('.forecast-btn'),
+                    },
+                    datasetStyles: {
+                        history: { label: '历史负荷', borderColor: 'rgb(54, 162, 235)', borderWidth: 3 },
+                        hourly: { label: '预测 (Hourly)', borderColor: 'rgb(255, 99, 132)', borderDash: [5, 5] },
+                        '5min': { label: '预测 (5min)', borderColor: 'rgb(75, 192, 192)', borderDash: [5, 5] },
+                        '15min': { label: '预测 (15min)', borderColor: 'rgb(255, 206, 86)', borderDash: [5, 5] }
+                    },
+                    init: function () {
+                        this.chart = utils.createChart('historyLoadChart', {
+                            type: 'line', data: { datasets: [] },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { mode: 'index', intersect: false } }, scales: { x: { type: 'time', time: { unit: 'hour', tooltipFormat: 'HH:mm' } }, y: { title: { display: true, text: '负荷 (MW)' } } } }
+                        });
+                        this.elements.fetchButton.addEventListener('click', () => this.fetchHistoryLoad());
+                        this.elements.forecastButtons.forEach(btn => btn.addEventListener('click', () => this.toggleForecast(btn)));
+                        utils.setDefaultDateToYesterday('historyLoadDateInput');
+                    },
+                    fetchHistoryLoad: async function () {
+                        const selectedDate = this.elements.dateInput.value;
+                        if (!selectedDate) { this.elements.errorMsg.textContent = '请选择一个有效的日期。'; return; }
+                        this.elements.errorMsg.textContent = '';
+                        utils.toggleButtonLoading(this.elements.fetchButton, true, '查询历史数据');
+
+                        this.chart.data.datasets = [];
+                        this.chart.update();
+                        this.elements.forecastButtons.forEach(btn => btn.classList.remove('active'));
+
+                        try {
+                            const response = await fetch(`${API_BASE_URL}/load/history?date=${selectedDate}`);
+                            const result = await response.json();
+                            if (result.error) throw new Error(result.error);
+
+                            this.chart.data.datasets.push({ ...this.datasetStyles.history, data: utils.formatChartData(result, selectedDate) });
+                            this.chart.update();
+                            this.currentDate = selectedDate;
+                        } catch (error) {
+                            this.elements.errorMsg.textContent = `获取历史负荷失败: ${error.message}`;
+                            this.currentDate = null;
+                        } finally {
+                            utils.toggleButtonLoading(this.elements.fetchButton, false, '查询历史数据');
+                        }
+                    },
+                    toggleForecast: async function (button) {
+                        const selectedDate = this.elements.dateInput.value;
+                        const option = button.value;
+                        if (!this.currentDate || selectedDate !== this.currentDate) { this.elements.errorMsg.textContent = '日期已更改或未加载，请先查询历史数据。'; return; }
+
+                        this.elements.errorMsg.textContent = '';
+                        button.disabled = true;
+
+                        try {
+                            const style = this.datasetStyles[option];
+                            const existingIndex = this.chart.data.datasets.findIndex(d => d.label === style.label);
+
+                            if (existingIndex > -1) {
+                                this.chart.data.datasets.splice(existingIndex, 1);
+                                button.classList.remove('active');
+                            } else {
+                                const response = await fetch(`${API_BASE_URL}/load/forecast?date=${selectedDate}&option=${option}`);
+                                const result = await response.json();
+                                if (result.error) throw new Error(result.error);
+
+                                this.chart.data.datasets.push({ ...style, data: utils.formatChartData(result, selectedDate) });
+                                button.classList.add('active');
+                            }
+                            this.chart.update();
+                        } catch (error) {
+                            this.elements.errorMsg.textContent = `获取预测数据 (${option}) 失败: ${error.message}`;
+                        } finally {
+                            button.disabled = false;
+                        }
+                    }
+                },
+                init: function () { this.realtime.init(); this.history.init(); }
+            };
+
+            // ==========================================================
+            //              储能图表 (Storage Charts)
+            // ==========================================================
+            const storageCharts = {
+                realtime: {
+                    chart: null,
+                    init: function () {
+                        this.chart = utils.createChart('realtimeStorageChart', {
+                            type: 'line',
+                            data: { datasets: [{ label: '实时储能', data: [], borderColor: 'rgb(153, 102, 255)', backgroundColor: 'rgba(153, 102, 255, 0.2)', tension: 0.1, fill: true }] },
+                            options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'time', time: { unit: 'hour' } }, y: { title: { display: true, text: '储能 (MW)' } } } }
+                        });
+                        this.update();
+                        setInterval(() => this.update(), 300000);
+                    },
+                    update: async function () {
+                        try {
+                            const response = await fetch(`${API_BASE_URL}/storage/today`);
+                            const data = await response.json();
+                            if (data.error) return;
+                            const todayStr = new Date().toISOString().split('T')[0];
+                            this.chart.data.datasets[0].data = utils.formatChartData(data, todayStr);
+                            this.chart.update('none');
+                        } catch (error) { console.error('Failed to update realtime storage chart:', error); }
+                    }
+                },
+                history: {
+                    chart: null,
+                    elements: {
+                        dateInput: document.getElementById('historyStorageDateInput'),
+                        fetchButton: document.getElementById('fetchHistoryStorageButton'),
+                        errorMsg: document.getElementById('historyStorageError'),
+                    },
+                    init: function () {
+                        this.chart = utils.createChart('historyStorageChart', {
+                            type: 'line',
+                            data: { datasets: [{ label: '历史储能', data: [], borderColor: 'rgb(255, 159, 64)', backgroundColor: 'rgba(255, 159, 64, 0.2)', fill: true }] },
+                            options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'time', time: { unit: 'hour' } }, y: { title: { display: true, text: '储能 (MW)' } } } }
+                        });
+                        this.elements.fetchButton.addEventListener('click', () => this.fetchHistoryStorage());
+                        utils.setDefaultDateToYesterday('historyStorageDateInput');
+                    },
+                    fetchHistoryStorage: async function () {
+                        const selectedDate = this.elements.dateInput.value;
+                        if (!selectedDate) { this.elements.errorMsg.textContent = '请选择一个有效的日期。'; return; }
+                        this.elements.errorMsg.textContent = '';
+                        utils.toggleButtonLoading(this.elements.fetchButton, true, '查询历史数据');
+
+                        try {
+                            const response = await fetch(`${API_BASE_URL}/storage/history?date=${selectedDate}`);
+                            const result = await response.json();
+                            if (result.error) throw new Error(result.error);
+
+                            this.chart.data.datasets[0].data = utils.formatChartData(result, selectedDate);
+                            this.chart.update();
+                        } catch (error) {
+                            this.elements.errorMsg.textContent = `获取历史储能失败: ${error.message}`;
+                        } finally {
+                            utils.toggleButtonLoading(this.elements.fetchButton, false, '查询历史数据');
+                        }
+                    }
+                },
+                init: function () { this.realtime.init(); this.history.init(); }
+            };
+
+            // ==========================================================
+            //              主干电价图表 (Hub LMP Charts)
+            // ==========================================================
+            const hubLmpCharts = {
+                realtime: {
+                    chartInstances: {},
+                    init: function () {
+                        this.initializeCharts();
+                        setInterval(() => this.updateCharts(), 300000);
+                    },
+                    createChart: function (canvasId) {
+                        return utils.createChart(canvasId, {
+                            type: 'line',
+                            data: { datasets: [{ label: '日前小时电价', data: [], borderColor: 'rgb(255, 99, 132)', fill: false }, { label: '实时5分钟电价', data: [], borderColor: 'rgb(54, 162, 235)', backgroundColor: 'rgba(54, 162, 235, 0.2)', fill: true }] },
+                            options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'time', time: { unit: 'hour' } }, y: { title: { display: true, text: '电价 ($/MWh)' } } } }
+                        });
+                    },
+                    initializeCharts: async function () {
+                        const container = document.getElementById('hubRealtimeLmpChartsContainer');
+                        container.innerHTML = '<p>加载中...</p>';
+                        try {
+                            const response = await fetch(`${API_BASE_URL}/lmp/trading_hubs/today`);
+                            const data = await response.json();
+                            if (data.error) throw new Error(data.error);
+
+                            container.innerHTML = '';
+                            const todayStr = new Date().toISOString().split('T')[0];
+
+                            for (const hubName in data.hubs) {
+                                const colDiv = document.createElement('div');
+                                colDiv.className = 'col';
+                                colDiv.innerHTML = `<h3 class="card-title" style="font-size: 1.2em;">${hubName}</h3>`;
+                                const chartContainer = document.createElement('div');
+                                chartContainer.className = 'chart-container';
+                                const canvasId = `hub-realtime-${hubName}`;
+                                chartContainer.innerHTML = `<canvas id="${canvasId}"></canvas>`;
+                                colDiv.appendChild(chartContainer);
+                                container.appendChild(colDiv);
+
+                                const chart = this.createChart(canvasId);
+                                this.chartInstances[hubName] = chart;
+
+                                const hubData = data.hubs[hubName];
+                                if (hubData.day_ahead_hourly && !hubData.day_ahead_hourly.error) {
+                                    chart.data.datasets[0].data = utils.formatChartData(hubData.day_ahead_hourly, todayStr);
+                                }
+                                if (hubData.real_time_5_min && !hubData.real_time_5_min.error) {
+                                    chart.data.datasets[1].data = utils.formatChartData(hubData.real_time_5_min, todayStr);
+                                }
+                                chart.update();
+                            }
+                        } catch (error) {
+                            container.innerHTML = '<p style="color: red;">加载主干网络实时电价图表失败。</p>';
+                            console.error('Failed to initialize hub realtime charts:', error);
+                        }
+                    },
+                    updateCharts: async function () {
+                        try {
+                            const response = await fetch(`${API_BASE_URL}/lmp/trading_hubs/today`);
+                            const data = await response.json();
+                            if (data.error) throw new Error(data.error);
+
+                            const todayStr = new Date().toISOString().split('T')[0];
+                            for (const hubName in this.chartInstances) {
+                                const chart = this.chartInstances[hubName];
+                                const hubData = data.hubs[hubName];
+                                if (hubData) {
+                                    if (hubData.day_ahead_hourly && !hubData.day_ahead_hourly.error) {
+                                        chart.data.datasets[0].data = utils.formatChartData(hubData.day_ahead_hourly, todayStr);
+                                    }
+                                    if (hubData.real_time_5_min && !hubData.real_time_5_min.error) {
+                                        chart.data.datasets[1].data = utils.formatChartData(hubData.real_time_5_min, todayStr);
+                                    }
+                                    chart.update('none');
+                                }
+                            }
+                        } catch (error) { console.error('Failed to update hub realtime charts:', error); }
+                    }
+                },
+                history: {
+                    chart: null,
+                    elements: {
+                        dateInput: document.getElementById('hubHistoryLmpDateInput'),
+                        fetchButton: document.getElementById('fetchHubHistoryLmpButton'),
+                        errorMsg: document.getElementById('hubHistoryLmpError'),
+                        selectorContainer: document.getElementById('hubSelectorContainer')
+                    },
+                    init: function () {
+                        this.chart = utils.createChart('hubHistoryLmpChart', {
+                            type: 'line', data: { datasets: [] },
+                            options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'time', time: { unit: 'hour' } }, y: { title: { display: true, text: '电价 ($/MWh)' } } } }
+                        });
+                        this.elements.fetchButton.addEventListener('click', () => this.fetchHistoryData());
+                        this.initializeSelector();
+                        utils.setDefaultDateToYesterday('hubHistoryLmpDateInput');
+                    },
+                    initializeSelector: async function () {
+                        try {
+                            const response = await fetch(`${API_BASE_URL}/locations/trading_hubs`);
+                            const data = await response.json();
+                            if (data.error) throw new Error(data.error);
+
+                            this.elements.selectorContainer.innerHTML = '<span style="font-weight: bold;">主干网络:</span>';
+                            data.locations.forEach(location => {
+                                this.elements.selectorContainer.innerHTML += `
+                            <div class="location-item">
+                                <input type="checkbox" id="hub-${location}" value="${location}">
+                                <label for="hub-${location}">${location}</label>
+                            </div>`;
+                            });
+                        } catch (error) {
+                            this.elements.selectorContainer.innerHTML = '<span style="color: red;">加载主干网络列表失败</span>';
+                            console.error('Failed to load trading hubs:', error);
+                        }
+                    },
+                    fetchHistoryData: async function () {
+                        const date = this.elements.dateInput.value;
+                        const market = document.querySelector('input[name="hub_history_market"]:checked').value;
+                        const selectedHubs = Array.from(this.elements.selectorContainer.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+
+                        if (!date) { this.elements.errorMsg.textContent = '请选择一个有效的日期。'; return; }
+                        if (selectedHubs.length === 0) { this.elements.errorMsg.textContent = '请至少选择一个主干网络。'; return; }
+
+                        this.elements.errorMsg.textContent = '';
+                        utils.toggleButtonLoading(this.elements.fetchButton, true);
+                        this.chart.data.datasets = [];
+
+                        try {
+                            const response = await fetch(`${API_BASE_URL}/lmp/trading_hubs/history?date=${date}&market=${market}&locations=${selectedHubs.join(',')}`);
+                            const result = await response.json();
+                            if (result.error) throw new Error(result.error);
+
+                            let colorIndex = 0;
+                            for (const location in result) {
+                                this.chart.data.datasets.push({
+                                    label: location,
+                                    data: utils.formatChartData(result[location], date),
+                                    borderColor: utils.chartColors[colorIndex++ % utils.chartColors.length],
+                                    fill: false
+                                });
+                            }
+                            this.chart.update();
+                        } catch (error) {
+                            this.elements.errorMsg.textContent = `获取主干电网历史电价失败: ${error.message}`;
+                        } finally {
+                            utils.toggleButtonLoading(this.elements.fetchButton, false);
+                        }
+                    }
+                },
+                init: function () { this.realtime.init(); this.history.init(); }
+            };
+
+            // ==========================================================
+            //            地区节点电价图表 (Node LMP Charts)
+            // ==========================================================
+            const nodeLmpCharts = {
+                history: {
+                    chart: null,
+                    allLmpData: {},
+                    elements: {
+                        dateInput: document.getElementById('historyLmpDateInput'),
+                        fetchButton: document.getElementById('fetchHistoryLmpButton'),
+                        errorMsg: document.getElementById('historyLmpError'),
+                        selectorContainer: document.getElementById('locationSelector'),
+                        searchInput: document.getElementById('locationSearchInput')
+                    },
+                    init: function () {
+                        this.chart = utils.createChart('historyLmpChart', {
+                            type: 'line', data: { datasets: [] },
+                            options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'time', time: { unit: 'hour' } }, y: { title: { display: true, text: '电价 ($/MWh)' } } } }
+                        });
+                        this.elements.fetchButton.addEventListener('click', () => this.fetchAllNodesData());
+                        this.elements.searchInput.addEventListener('keyup', () => this.filterLocations());
+                        utils.setDefaultDateToYesterday('historyLmpDateInput');
+                    },
+                    fetchAllNodesData: async function () {
+                        const date = this.elements.dateInput.value;
+                        const market = document.querySelector('input[name="history_market"]:checked').value;
+                        if (!date) { this.elements.errorMsg.textContent = '请选择一个有效的日期。'; return; }
+
+                        this.elements.errorMsg.textContent = '';
+                        utils.toggleButtonLoading(this.elements.fetchButton, true);
+                        this.elements.selectorContainer.innerHTML = '<p>加载中...</p>';
+                        this.chart.data.datasets = [];
+                        this.chart.update();
+
+                        try {
+                            const response = await fetch(`${API_BASE_URL}/lmp/history/all_nodes?date=${date}&market=${market}`);
+                            this.allLmpData = await response.json();
+                            if (this.allLmpData.error) throw new Error(this.allLmpData.error);
+
+                            this.populateLocationSelector(Object.keys(this.allLmpData).sort());
+                        } catch (error) {
+                            this.elements.errorMsg.textContent = `获取历史电价失败: ${error.message}`;
+                            this.elements.selectorContainer.innerHTML = '<p>数据加载失败。</p>';
+                        } finally {
+                            utils.toggleButtonLoading(this.elements.fetchButton, false);
+                        }
+                    },
+                    populateLocationSelector: function (locations) {
+                        this.elements.selectorContainer.innerHTML = '';
+                        if (locations.length === 0) {
+                            this.elements.selectorContainer.innerHTML = '<p>未找到任何地区数据。</p>'; return;
+                        }
+                        locations.forEach(location => {
+                            const itemDiv = document.createElement('div');
+                            itemDiv.className = 'location-item';
+                            itemDiv.innerHTML = `
+                        <input type="checkbox" id="loc-${location}" value="${location}">
+                        <label for="loc-${location}">${location}</label>`;
+                            itemDiv.querySelector('input').addEventListener('change', (e) => this.handleLocationSelection(e));
+                            this.elements.selectorContainer.appendChild(itemDiv);
+                        });
+                    },
+                    handleLocationSelection: function (event) {
+                        const location = event.target.value;
+                        const date = this.elements.dateInput.value;
+                        const existingIndex = this.chart.data.datasets.findIndex(d => d.label === location);
+
+                        if (event.target.checked && existingIndex === -1) {
+                            const colorIndex = this.chart.data.datasets.length % utils.chartColors.length;
+                            this.chart.data.datasets.push({
+                                label: location,
+                                data: utils.formatChartData(this.allLmpData[location], date),
+                                borderColor: utils.chartColors[colorIndex],
+                                fill: false
+                            });
+                        } else if (!event.target.checked && existingIndex > -1) {
+                            this.chart.data.datasets.splice(existingIndex, 1);
+                        }
+                        this.chart.update();
+                    },
+                    filterLocations: function () {
+                        const filter = this.elements.searchInput.value.toUpperCase();
+                        const items = this.elements.selectorContainer.getElementsByClassName('location-item');
+                        for (let item of items) {
+                            const label = item.getElementsByTagName('label')[0];
+                            item.style.display = (label.textContent.toUpperCase().indexOf(filter) > -1) ? "" : "none";
+                        }
+                    }
+                },
+                init: function () { this.history.init(); }
+            };
+
+            // ==========================================================
+            //              燃料组合图表 (Fuel Mix Charts)
+            // ==========================================================
+            const fuelMixCharts = {
+                createChart: function (canvasId) {
+                    return utils.createChart(canvasId, {
+                        type: 'line', data: { labels: [], datasets: [] },
+                        options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'time', time: { unit: 'hour' } }, y: { stacked: true, title: { display: true, text: '发电量 (MW)' } } } }
+                    });
+                },
+                processData: function (chart, data, dateString) {
+                    const newDatasets = [];
+                    let timeLabels = [];
+                    const orderedEnergyTypes = Object.keys(utils.fuelColors);
+
+                    for (const energyType of orderedEnergyTypes) {
+                        if (data[energyType]) {
+                            const energyData = data[energyType];
+                            if (timeLabels.length === 0) {
+                                timeLabels = energyData.time.map(timeStr => {
+                                    const [hours, minutes] = timeStr.split(':');
+                                    const date = new Date(`${dateString}T00:00:00`);
+                                    date.setHours(hours, minutes, 0, 0);
+                                    return date;
+                                });
+                            }
+                            newDatasets.push({
+                                label: energyType, data: energyData.value,
+                                backgroundColor: utils.fuelColors[energyType],
+                                borderColor: utils.fuelColors[energyType].replace('0.7', '1'),
+                                borderWidth: 1, fill: true
+                            });
+                        }
+                    }
+                    chart.data.labels = timeLabels;
+                    chart.data.datasets = newDatasets;
+                    chart.update('none');
+                },
+                today: {
+                    chart: null,
+                    init: function (outer) {
+                        this.chart = outer.createChart('todayFuelMixChart');
+                        this.update(outer);
+                        setInterval(() => this.update(outer), 300000);
+                    },
+                    update: async function (outer) {
+                        try {
+                            const response = await fetch(`${API_BASE_URL}/fuel_mix/today`);
+                            const data = await response.json();
+                            if (data.error) throw new Error(data.error);
+                            const todayStr = new Date().toISOString().split('T')[0];
+                            outer.processData(this.chart, data, todayStr);
+                        } catch (error) { console.error('Failed to update today fuel mix chart:', error); }
+                    }
+                },
+                history: {
+                    chart: null,
+                    elements: {
+                        dateInput: document.getElementById('historyFuelMixDateInput'),
+                        fetchButton: document.getElementById('fetchHistoryFuelMixButton'),
+                        errorMsg: document.getElementById('historyFuelMixError'),
+                    },
+                    init: function (outer) {
+                        this.chart = outer.createChart('historyFuelMixChart');
+                        this.elements.fetchButton.addEventListener('click', () => this.fetchData(outer));
+                        utils.setDefaultDateToYesterday('historyFuelMixDateInput');
+                    },
+                    fetchData: async function (outer) {
+                        const date = this.elements.dateInput.value;
+                        if (!date) { this.elements.errorMsg.textContent = '请选择一个有效的日期。'; return; }
+                        this.elements.errorMsg.textContent = '';
+                        utils.toggleButtonLoading(this.elements.fetchButton, true);
+
+                        try {
+                            const response = await fetch(`${API_BASE_URL}/fuel_mix/history?date=${date}`);
+                            const data = await response.json();
+                            if (data.error) throw new Error(data.error);
+                            outer.processData(this.chart, data, date);
+                        } catch (error) {
+                            this.elements.errorMsg.textContent = `获取历史燃料组合失败: ${error.message}`;
+                        } finally {
+                            utils.toggleButtonLoading(this.elements.fetchButton, false);
+                        }
+                    }
+                },
+                init: function () { this.today.init(this); this.history.init(this); }
+            };
+
+            /**
+             * 主初始化函数
+             * 调用所有模块的初始化方法
+             */
+            function initialize() {
+                realtimeLabels.init();
+                loadCharts.init();
+                storageCharts.init();
+                hubLmpCharts.init();
+                nodeLmpCharts.init();
+                fuelMixCharts.init();
+            }
+
+            // 启动所有功能
+            initialize();
+        });
+    </script>
+</body>
+
+</html>
