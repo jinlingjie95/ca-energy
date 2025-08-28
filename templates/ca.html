@@ -164,6 +164,18 @@
         .forecast-btn.active { background-color: #28a745; }
         .forecast-btn:disabled { background-color: #e9ecef; cursor: not-allowed; color: #6c757d; }
 
+        /* 实时和历史主干网络图表布局 */
+        #hubRealtimeLmpChartsContainer .col, #lmpChartsContainer .col {
+            flex-grow: 0;
+            flex-shrink: 0;
+            flex-basis: calc(50% - 12.5px);
+        }
+        @media (max-width: 992px) {
+            #hubRealtimeLmpChartsContainer .col, #lmpChartsContainer .col {
+                flex-basis: 100%;
+            }
+        }
+
         /* 主干电网选择器样式 */
         .hub-selector-container {
             display: flex;
@@ -173,7 +185,7 @@
             margin-top: 10px;
         }
 
-        /* --- 历史电价查询板块布局 --- */
+        /* --- 历史地区电价查询板块布局 --- */
         .history-lmp-wrapper {
             display: flex;
             flex-wrap: wrap;
@@ -293,6 +305,13 @@
                     <canvas id="historyStorageChart"></canvas>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title">主干网络实时电价</h2>
+        <div class="row" id="hubRealtimeLmpChartsContainer">
+            <!-- JS will populate this -->
         </div>
     </div>
 
@@ -447,7 +466,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function updateRealtimeLabels() {
         try {
             // 获取负荷数据
-            const loadResponse = await fetch('/api/load/latest_point');
+            const loadResponse = await fetch('/api/load/latest');
             const loadData = await loadResponse.json();
             if (!loadData.error) {
                 document.getElementById('latestLoadValue').textContent = loadData.value.toFixed(0);
@@ -455,7 +474,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // 获取储能数据
-            const storageResponse = await fetch('/api/storage/latest_point');
+            const storageResponse = await fetch('/api/storage/latest');
             const storageData = await storageResponse.json();
             if (!storageData.error) {
                 document.getElementById('latestStorageValue').textContent = storageData.value.toFixed(0);
@@ -470,7 +489,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function updateRealtimeHubLmpLabels() {
         const container = document.getElementById('latestHubLmpContainer');
         try {
-            const response = await fetch('/api/lmp/latest/trading_hubs');
+            const response = await fetch('/api/lmp/trading_hubs/latest');
             const data = await response.json();
             if (data.error) throw new Error(data.error);
 
@@ -518,15 +537,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ==========================================================
-    //                   负荷图表逻辑
+    //                   电力负荷图表
     // ==========================================================
 
-    // --- 实时负荷图表 ---
+    // --- 当日负荷图表 ---
     const realtimeLoadChart = createChart('realtimeLoadChart', '实时负荷', '负荷 (MW)', 'rgb(75, 192, 192)', 'rgba(75, 192, 192, 0.2)');
     
     async function updateRealtimeLoadChart() {
         try {
-            const response = await fetch('/api/load/realtime');
+            const response = await fetch('/api/load/today');
             const data = await response.json();
             if (data.error) return;
             const todayStr = new Date().toISOString().split('T')[0];
@@ -640,15 +659,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ==========================================================
-    //                   储能图表逻辑
+    //                   储能图表
     // ==========================================================
 
-    // --- 实时储能图表 ---
+    // --- 当日储能图表 ---
     const realtimeStorageChart = createChart('realtimeStorageChart', '实时储能', '储能 (MW)', 'rgb(153, 102, 255)', 'rgba(153, 102, 255, 0.2)');
 
     async function updateRealtimeStorageChart() {
         try {
-            const response = await fetch('/api/storage/realtime');
+            const response = await fetch('/api/storage/today');
             const data = await response.json();
             if (data.error) return;
             const todayStr = new Date().toISOString().split('T')[0];
@@ -687,6 +706,105 @@ document.addEventListener('DOMContentLoaded', function() {
         } finally {
             fetchHistoryStorageBtn.disabled = false;
             fetchHistoryStorageBtn.textContent = '查询历史数据';
+        }
+    }
+
+    // ==========================================================
+    //                   主干网络当日电价图表
+    // ==========================================================
+    let hubRealtimeChartInstances = {};
+
+    function createHubRealtimeLmpChart(canvasId) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        return new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    { label: '日前小时电价', data: [], borderColor: 'rgb(255, 99, 132)', fill: false, borderWidth: 2, tension: 0.1 },
+                    { label: '实时5分钟电价', data: [], borderColor: 'rgb(54, 162, 235)', fill: true, backgroundColor: 'rgba(54, 162, 235, 0.2)', borderWidth: 2, tension: 0.1 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'top' } },
+                scales: {
+                    x: { type: 'time', time: { unit: 'hour', tooltipFormat: 'HH:mm' }, title: { display: true, text: '时间' } },
+                    y: { title: { display: true, text: '电价 ($/MWh)' } }
+                }
+            }
+        });
+    }
+
+    async function initializeHubRealtimeCharts() {
+        const container = document.getElementById('hubRealtimeLmpChartsContainer');
+        container.innerHTML = '<p>加载中...</p>';
+        try {
+            const response = await fetch('/api/lmp/trading_hubs/today');
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+
+            container.innerHTML = ''; // Clear loading text
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            for (const hubName in data.hubs) {
+                const colDiv = document.createElement('div');
+                colDiv.className = 'col';
+                const title = document.createElement('h3');
+                title.className = 'card-title';
+                title.style.fontSize = '1.2em';
+                title.textContent = hubName;
+                const chartContainer = document.createElement('div');
+                chartContainer.className = 'chart-container';
+                const canvas = document.createElement('canvas');
+                const canvasId = `hub-realtime-${hubName}`;
+                canvas.id = canvasId;
+
+                chartContainer.appendChild(canvas);
+                colDiv.appendChild(title);
+                colDiv.appendChild(chartContainer);
+                container.appendChild(colDiv);
+
+                const chart = createHubRealtimeLmpChart(canvasId);
+                hubRealtimeChartInstances[hubName] = chart;
+
+                const hubData = data.hubs[hubName];
+                if (hubData.day_ahead_hourly && !hubData.day_ahead_hourly.error) {
+                    chart.data.datasets[0].data = formatDataForChart(hubData.day_ahead_hourly, todayStr);
+                }
+                if (hubData.real_time_5_min && !hubData.real_time_5_min.error) {
+                    chart.data.datasets[1].data = formatDataForChart(hubData.real_time_5_min, todayStr);
+                }
+                chart.update();
+            }
+        } catch (error) {
+            container.innerHTML = '<p style="color: red;">加载主干网络实时电价图表失败。</p>';
+            console.error('Failed to initialize hub realtime charts:', error);
+        }
+    }
+
+    async function updateHubRealtimeCharts() {
+        console.log("正在刷新主干网络实时电价图表...");
+        try {
+            const response = await fetch('/api/lmp/trading_hubs/today');
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+
+            const todayStr = new Date().toISOString().split('T')[0];
+            for (const hubName in hubRealtimeChartInstances) {
+                const chart = hubRealtimeChartInstances[hubName];
+                const hubData = data.hubs[hubName];
+                if (hubData) {
+                    if (hubData.day_ahead_hourly && !hubData.day_ahead_hourly.error) {
+                        chart.data.datasets[0].data = formatDataForChart(hubData.day_ahead_hourly, todayStr);
+                    }
+                    if (hubData.real_time_5_min && !hubData.real_time_5_min.error) {
+                        chart.data.datasets[1].data = formatDataForChart(hubData.real_time_5_min, todayStr);
+                    }
+                    chart.update('none');
+                }
+            }
+        } catch (error) {
+            console.error('刷新主干网络实时电价图表失败:', error);
         }
     }
 
@@ -741,7 +859,7 @@ document.addEventListener('DOMContentLoaded', function() {
         hubHistoryLmpChart.data.datasets = [];
 
         try {
-            const response = await fetch(`/api/lmp/history/trading_hubs?date=${selectedDate}&market=${selectedMarket}&locations=${selectedHubs.join(',')}`);
+            const response = await fetch(`/api/lmp/trading_hubs/history?date=${selectedDate}&market=${selectedMarket}&locations=${selectedHubs.join(',')}`);
             const result = await response.json();
             if (result.error) throw new Error(result.error);
             
@@ -1017,6 +1135,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 初始化主干电网选择器
     initializeTradingHubSelector(); 
+    initializeHubRealtimeCharts(); 
 
     // --- 首次加载数据 ---
     updateRealtimeLabels();
@@ -1033,6 +1152,7 @@ document.addEventListener('DOMContentLoaded', function() {
     //
     setInterval(updateRealtimeLoadChart, 300000); // 每5分钟刷新实时负荷图表
     setInterval(updateRealtimeStorageChart, 300000); // 每5分钟刷新实时储能图表
+    setInterval(updateHubRealtimeCharts, 300000); // [新增]
     setInterval(updateTodayFuelMixChart, 300000);
 });
 </script>

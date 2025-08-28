@@ -37,33 +37,19 @@ else:
     app.logger.info('应用程序已在测试环境中启动 (Debug Mode)')
 
 # --------------------------------------------------------------------------
+# 功能函数
+# --------------------------------------------------------------------------
+
+def get_market_enum(market_str):
+    if market_str == 'day_ahead_hourly': return gridstatus.Markets.DAY_AHEAD_HOURLY
+    if market_str == 'real_time_5_min': return gridstatus.Markets.REAL_TIME_5_MIN
+    return None
+
+# --------------------------------------------------------------------------
 # 获取电力负荷数据的函数
 # --------------------------------------------------------------------------
 
-def get_realtime_load():
-    """从 CAISO 获取当天至今的实时电力负荷数据序列。"""
-    try:
-        app.logger.debug("正在尝试获取实时电力负荷...")
-        load_df = caiso.get_load(date='latest')
-        
-        if load_df is None or load_df.empty:
-            app.logger.warning("未获取到实时电力负荷数据，API 可能暂无数据。")
-            return {"error": "未获取到电力负荷数据，可能是API暂无数据。"}
-            
-        load_df['Time'] = pd.to_datetime(load_df['Time'])
-
-        data_to_return = {
-            "time": load_df['Time'].dt.strftime('%H:%M').tolist(),
-            "value": load_df['Load'].tolist()
-        }
-        app.logger.info("成功获取并处理了实时电力负荷数据。")
-        return data_to_return
-        
-    except Exception as e:
-        app.logger.error(f"获取实时数据时发生错误: {e}", exc_info=True)
-        return {"error": "服务器在获取实时数据时发生内部错误。"}
-    
-def get_realtime_load_latest_data():
+def get_latest_load():
     """从 CAISO 获取最新的一个实时电力负荷数据点。"""
     try:
         app.logger.debug("正在尝试获取实时电力负荷...")
@@ -93,6 +79,31 @@ def get_realtime_load_latest_data():
         # 使用 app.logger.error 来记录错误，exc_info=True 会自动附上完整的错误堆栈追踪
         app.logger.error(f"获取实时数据时发生错误: {e}", exc_info=True)
         return {"error": "服务器在获取实时数据时发生内部错误。"}
+
+def get_today_load():
+    """从 CAISO 获取当天至今的实时电力负荷数据序列。"""
+    try:
+        app.logger.debug("正在尝试获取实时电力负荷...")
+        load_df = caiso.get_load(date='latest')
+        
+        if load_df is None or load_df.empty:
+            app.logger.warning("未获取到实时电力负荷数据，API 可能暂无数据。")
+            return {"error": "未获取到电力负荷数据，可能是API暂无数据。"}
+            
+        load_df['Time'] = pd.to_datetime(load_df['Time'])
+
+        data_to_return = {
+            "time": load_df['Time'].dt.strftime('%H:%M').tolist(),
+            "value": load_df['Load'].tolist()
+        }
+        app.logger.info("成功获取并处理了实时电力负荷数据。")
+        return data_to_return
+        
+    except Exception as e:
+        app.logger.error(f"获取实时数据时发生错误: {e}", exc_info=True)
+        return {"error": "服务器在获取实时数据时发生内部错误。"}
+    
+
     
 def get_history_load(date=None):
     """根据指定日期从 CAISO 获取历史电力负荷数据。"""
@@ -165,7 +176,7 @@ def get_load_forecast(date=None, option=None, area=None):
 # 获取储能数据的函数
 # --------------------------------------------------------------------------
 
-def get_latest_storage_point():
+def get_latest_storage():
     """获取最新的单个储能数据点。"""
     try:
         app.logger.debug("正在获取最新的单个储能数据点...")
@@ -189,8 +200,8 @@ def get_latest_storage_point():
         app.logger.error(f"获取最新储能数据点时出错: {e}", exc_info=True)
         return {"error": str(e)}
 
-def get_realtime_storage():
-    """获取当天至今的储能数据序列，用于实时图表。"""
+def get_today_storage():
+    """获取当天至今的储能数据序列"""
     try:
         app.logger.debug("正在获取今日储能数据序列...")
         # 获取当天的数据需要传入一个日期对象
@@ -253,7 +264,7 @@ def get_main_traiding_hub_locations():
         app.logger.error(f"获取交易中心地点时出错: {e}", exc_info=True)
         return {"error": str(e)}
 
-def get_main_traiding_hub_latest_lmp_point(market=None, location=None):
+def get_main_traiding_hub_latest_lmp(market=None, location=None):
     """
     获取指定市场和地点的最新电价数据点。
     locations: e.g. ['TH_NP15_GEN-APND']
@@ -261,7 +272,7 @@ def get_main_traiding_hub_latest_lmp_point(market=None, location=None):
     """
     try:
         if market is None or location is None:
-            app.logger.warning("get_main_traiding_hub_latest_lmp_point 缺少必要参数: market 或 location")
+            app.logger.warning("get_main_traiding_hub_latest_lmp 缺少必要参数: market 或 location")
             return {"error": "必须提供 market 和 location 参数"}
         
         lmp_df = caiso.get_lmp(date='latest', market=market, locations=[location])
@@ -286,10 +297,12 @@ def get_main_traiding_hub_today_lmp(market=None, location=None):
     """
     try:
         if market is None or location is None:
+            app.logger.warning("get_main_traiding_hub_today_lmp 缺少必要参数: market 或 location")
             return {"error": "必须提供 market 和 location 参数"}
         
         lmp_df = caiso.get_lmp(date="today", market=market, locations=[location])
         if lmp_df is None or lmp_df.empty:
+            app.logger.warning(f"未获取到 {location} 的当日电价数据。")
             return {"error": "No LMP data available"}
         
         # 转换时间格式
@@ -303,8 +316,10 @@ def get_main_traiding_hub_today_lmp(market=None, location=None):
             }
         }
 
+        app.logger.info(f"成功获取了 {location} 的当日电价数据。")
         return data_to_return
     except Exception as e:
+        app.logger.error(f"获取当日电价数据 ({location}) 时出错: {e}", exc_info=True)
         return {"error": str(e)}
     
 def get_main_traiding_hub_history_lmp(date=None, market=None, location=None):
@@ -533,14 +548,7 @@ def get_curtailed_non_operational_generator_report(date=None):
         return {"error": str(e)}
 
 
-# --------------------------------------------------------------------------
-# 功能函数
-# --------------------------------------------------------------------------
 
-def get_market_enum(market_str):
-    if market_str == 'day_ahead_hourly': return gridstatus.Markets.DAY_AHEAD_HOURLY
-    if market_str == 'real_time_5_min': return gridstatus.Markets.REAL_TIME_5_MIN
-    return None
 
 
 # --------------------------------------------------------------------------
@@ -562,18 +570,19 @@ def ca_page():
 # --------------------------------------------------------------------------
 # 负荷数据 API
 # --------------------------------------------------------------------------
-@app.route('/api/load/realtime')
-def api_realtime_load():
-    """提供当天至今的实时电力负荷数据序列的API端点"""
-    app.logger.info("API请求: /api/load/realtime")
-    data = get_realtime_load()
+
+@app.route('/api/load/latest')
+def api_latest_load():
+    """提供最新的单个电力负荷数据点的API端点"""
+    app.logger.info("API请求: /api/load/latest")
+    data = get_latest_load()
     return jsonify(data)
 
-@app.route('/api/load/latest_point')
-def api_realtime_load_latest():
-    """提供最新的单个电力负荷数据点的API端点"""
-    app.logger.info("API请求: /api/load/latest_point")
-    data = get_realtime_load_latest_data()
+@app.route('/api/load/today')
+def api_today_load():
+    """提供当天至今的电力负荷数据序列的API端点"""
+    app.logger.info("API请求: /api/load/today")
+    data = get_today_load()
     return jsonify(data)
 
 @app.route('/api/load/history')
@@ -598,18 +607,19 @@ def api_load_forecast():
 # --------------------------------------------------------------------------
 # 储能数据 API
 # --------------------------------------------------------------------------
-@app.route('/api/storage/realtime')
-def api_realtime_storage():
-    """提供当天至今的储能数据序列的API端点"""
-    app.logger.info("API请求: /api/storage/realtime")
-    data = get_realtime_storage()
-    return jsonify(data)
 
-@app.route('/api/storage/latest_point')
+@app.route('/api/storage/latest')
 def api_latest_storage_point():
     """提供最新的单个储能数据点的API端点"""
-    app.logger.info("API请求: /api/storage/latest_point")
-    data = get_latest_storage_point()
+    app.logger.info("API请求: /api/storage/latest")
+    data = get_latest_storage()
+    return jsonify(data)
+
+@app.route('/api/storage/today')
+def api_today_storage():
+    """提供当天至今的储能数据序列的API端点"""
+    app.logger.info("API请求: /api/storage/today")
+    data = get_today_storage()
     return jsonify(data)
 
 @app.route('/api/storage/history')
@@ -623,14 +633,14 @@ def api_history_storage():
     return jsonify(data)
 
 # --------------------------------------------------------------------------
-# 电价数据 API
+# 主干电网电价数据 API
 # --------------------------------------------------------------------------
 @app.route('/api/locations/trading_hubs')
 def api_get_trading_hub_locations():
     return jsonify(get_main_traiding_hub_locations())
 
 # --- 主干电网最新电价 API ---
-@app.route('/api/lmp/latest/trading_hubs')
+@app.route('/api/lmp/trading_hubs/latest')
 def api_latest_trading_hubs_lmp():
     """获取所有主干电网的最新实时电价。"""
     locations_data = get_main_traiding_hub_locations()
@@ -641,13 +651,29 @@ def api_latest_trading_hubs_lmp():
     all_latest_data = {}
     for loc in locations_data.get("locations", []):
         all_latest_data[loc] = {
-            "day_ahead_hourly": get_main_traiding_hub_latest_lmp_point(market=gridstatus.Markets.DAY_AHEAD_HOURLY, location=loc),
-            "real_time_5_min": get_main_traiding_hub_latest_lmp_point(market=gridstatus.Markets.REAL_TIME_5_MIN, location=loc)
+            "day_ahead_hourly": get_main_traiding_hub_latest_lmp(market=gridstatus.Markets.DAY_AHEAD_HOURLY, location=loc),
+            "real_time_5_min": get_main_traiding_hub_latest_lmp(market=gridstatus.Markets.REAL_TIME_5_MIN, location=loc)
         }
     return jsonify({"locations": all_latest_data})
 
+# --- 主干电网当日电价 API ---
+@app.route('/api/lmp/trading_hubs/today')
+def api_today_trading_hubs_lmp():
+    """获取所有主干电网的今日实时电价。"""
+    locations_data = get_main_traiding_hub_locations()
+    if "error" in locations_data:
+        return jsonify(locations_data), 500
+
+    all_today_data = {}
+    for loc in locations_data.get("locations", []):
+        all_today_data[loc] = {
+            "day_ahead_hourly": get_main_traiding_hub_today_lmp(market=gridstatus.Markets.DAY_AHEAD_HOURLY, location=loc),
+            "real_time_5_min": get_main_traiding_hub_today_lmp(market=gridstatus.Markets.REAL_TIME_5_MIN, location=loc)
+        }
+    return jsonify({"hubs": all_today_data})
+
 # --- 主干电网历史电价 API ---
-@app.route('/api/lmp/history/trading_hubs')
+@app.route('/api/lmp/trading_hubs/history')
 def api_history_trading_hubs_lmp():
     date_param = request.args.get('date')
     market_str = request.args.get('market')
@@ -672,7 +698,11 @@ def api_history_trading_hubs_lmp():
         
     return jsonify(all_data)
 
-# --- 地区历史电价数据 API ---
+# --------------------------------------------------------------------------
+# 节点电网电价数据 API
+# --------------------------------------------------------------------------
+
+# --- 节点历史电价数据 API ---
 @app.route('/api/lmp/history/all_nodes')
 def api_history_all_nodes_lmp():
     """提供所有节点历史电价数据的API端点"""
@@ -690,7 +720,10 @@ def api_history_all_nodes_lmp():
     data = get_all_apnode_history_lmp(date=date_param, market=market_enum)
     return jsonify(data)
 
-# --- 燃料组合 API ---
+# --------------------------------------------------------------------------
+# 燃料组合数据 API
+# --------------------------------------------------------------------------
+
 @app.route('/api/fuel_mix/today')
 def api_get_fuel_mix_today():
     """提供今日燃料组合数据的API端点。"""
@@ -698,7 +731,6 @@ def api_get_fuel_mix_today():
     data = get_fuel_mix_today()
     return jsonify(data)
 
-# --- 历史燃料组合 API ---
 @app.route('/api/fuel_mix/history')
 def api_get_fuel_mix_history():
     """提供历史燃料组合数据的API端点。"""
