@@ -340,6 +340,32 @@
         </div>
     </div>
 
+    <!-- 燃料组合板块 -->
+    <div class="card">
+        <div class="row">
+            <!-- 左侧: 今日燃料组合 -->
+            <div class="col">
+                <h2 class="card-title">今日燃料组合 (Fuel Mix)</h2>
+                <div class="chart-container">
+                    <canvas id="todayFuelMixChart"></canvas>
+                </div>
+            </div>
+            <!-- 右侧: 历史燃料组合 -->
+            <div class="col">
+                <h2 class="card-title">历史燃料组合查询</h2>
+                <div class="controls">
+                    <label for="historyFuelMixDate" style="font-weight: bold;">查询日期:</label>
+                    <input type="date" id="historyFuelMixDate" class="date-input">
+                    <button id="fetchHistoryFuelMixBtn" class="btn">查询</button>
+                </div>
+                <p id="historyFuelMixError" class="error-message"></p>
+                <div class="chart-container">
+                    <canvas id="historyFuelMixChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -872,6 +898,105 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+
+    // ==========================================================
+    //                   燃料组合图表逻辑
+    // ==========================================================
+    const fuelColors = {
+        "Solar": "rgba(255, 206, 86, 0.7)", "Wind": "rgba(75, 192, 192, 0.7)",
+        "Geothermal": "rgba(255, 99, 132, 0.7)", "Biomass": "rgba(139, 69, 19, 0.7)",
+        "Biogas": "rgba(189, 183, 107, 0.7)", "Small Hydro": "rgba(173, 216, 230, 0.7)",
+        "Coal": "rgba(105, 105, 105, 0.7)", "Nuclear": "rgba(153, 102, 255, 0.7)",
+        "Natural Gas": "rgba(255, 159, 64, 0.7)", "Large Hydro": "rgba(54, 162, 235, 0.7)",
+        "Batteries": "rgba(46, 204, 113, 0.7)", "Imports": "rgba(149, 165, 166, 0.7)",
+        "Other": "rgba(211, 211, 211, 0.7)"
+    };
+
+    function createFuelMixChart(canvasId) {
+        return new Chart(document.getElementById(canvasId).getContext('2d'), {
+            type: 'line',
+            data: { labels: [], datasets: [] },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'top' }, tooltip: { mode: 'index', intersect: false } },
+                scales: {
+                    x: { type: 'time', time: { unit: 'hour', tooltipFormat: 'HH:mm', displayFormats: { hour: 'HH:mm' } }, title: { display: true, text: '时间' } },
+                    y: { stacked: true, title: { display: true, text: '发电量 (MW)' } }
+                }
+            }
+        });
+    }
+
+    function processFuelMixData(chart, data, dateString) {
+        const newDatasets = [];
+        let timeLabels = [];
+        const orderedEnergyTypes = Object.keys(fuelColors);
+
+        for (const energyType of orderedEnergyTypes) {
+            if (data[energyType]) {
+                const energyData = data[energyType];
+                if (timeLabels.length === 0) {
+                    timeLabels = energyData.time.map(timeStr => {
+                        const [hours, minutes] = timeStr.split(':');
+                        const date = new Date(`${dateString}T00:00:00`);
+                        date.setHours(hours, minutes, 0, 0);
+                        return date;
+                    });
+                }
+                newDatasets.push({
+                    label: energyType, data: energyData.value,
+                    backgroundColor: fuelColors[energyType] || 'rgba(128, 128, 128, 0.7)',
+                    borderColor: fuelColors[energyType] ? fuelColors[energyType].replace('0.7', '1') : 'rgba(128, 128, 128, 1)',
+                    borderWidth: 1, fill: true, tension: 0.2
+                });
+            }
+        }
+        chart.data.labels = timeLabels;
+        chart.data.datasets = newDatasets;
+        chart.update('none');
+    }
+
+    // --- 今日燃料组合 ---
+    const todayFuelMixChart = createFuelMixChart('todayFuelMixChart');
+    async function updateTodayFuelMixChart() {
+        try {
+            const response = await fetch('/api/fuel_mix/today');
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+            const todayStr = new Date().toISOString().split('T')[0];
+            processFuelMixData(todayFuelMixChart, data, todayStr);
+        } catch (error) { console.error('获取今日燃料组合数据失败:', error); }
+    }
+
+    // --- 历史燃料组合 ---
+    const historyFuelMixChart = createFuelMixChart('historyFuelMixChart');
+    const fetchHistoryFuelMixBtn = document.getElementById('fetchHistoryFuelMixBtn');
+    const historyFuelMixDateInput = document.getElementById('historyFuelMixDate');
+    const historyFuelMixError = document.getElementById('historyFuelMixError');
+    
+    fetchHistoryFuelMixBtn.addEventListener('click', async () => {
+        const selectedDate = historyFuelMixDateInput.value;
+        if (!selectedDate) {
+            historyFuelMixError.textContent = '请选择一个有效的日期。';
+            return;
+        }
+        historyFuelMixError.textContent = '';
+        fetchHistoryFuelMixBtn.disabled = true;
+        fetchHistoryFuelMixBtn.textContent = '查询中...';
+
+        try {
+            const response = await fetch(`/api/fuel_mix/history?date=${selectedDate}`);
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+            processFuelMixData(historyFuelMixChart, data, selectedDate);
+        } catch (error) {
+            historyFuelMixError.textContent = `获取历史燃料组合失败: ${error.message}`;
+            console.error('获取历史燃料组合数据失败:', error);
+        } finally {
+            fetchHistoryFuelMixBtn.disabled = false;
+            fetchHistoryFuelMixBtn.textContent = '查询';
+        }
+    });
     
     // ==========================================================
     //                   初始化与事件绑定
@@ -881,6 +1006,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setDefaultDateToYesterday('historyLoadDate');
     setDefaultDateToYesterday('historyStorageDate');
     setDefaultDateToYesterday('historyLmpDate'); 
+    setDefaultDateToYesterday('historyFuelMixDate');
 
     // --- 绑定事件监听器 ---
     fetchHistoryLoadBtn.addEventListener('click', resetAndFetchHistoryLoad);
@@ -897,15 +1023,17 @@ document.addEventListener('DOMContentLoaded', function() {
     updateRealtimeHubLmpLabels(); // 更新主干电网实时电价标签
     updateRealtimeLoadChart();
     updateRealtimeStorageChart();
+    updateTodayFuelMixChart();
 
     
 
     // --- 设置定时刷新 ---
     setInterval(updateRealtimeLabels, 300000); // 5分钟刷新实时数据标签
     setInterval(updateRealtimeHubLmpLabels, 300000); // 5分钟刷新主干电网实时电价
+    //
     setInterval(updateRealtimeLoadChart, 300000); // 每5分钟刷新实时负荷图表
     setInterval(updateRealtimeStorageChart, 300000); // 每5分钟刷新实时储能图表
-    setInterval(updateLmpCharts, 300000); // 5分钟刷新一次电价图表
+    setInterval(updateTodayFuelMixChart, 300000);
 });
 </script>
 </body>

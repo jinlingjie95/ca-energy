@@ -235,7 +235,7 @@ def get_history_storage(date=None):
         return {"error": str(e)}
     
 # --------------------------------------------------------------------------
-# 获取实时电价的函数
+# 获取主干电网实时电价的函数
 # --------------------------------------------------------------------------
 
 def get_main_traiding_hub_locations():
@@ -280,6 +280,33 @@ def get_main_traiding_hub_latest_lmp_point(market=None, location=None):
         app.logger.error(f"获取最新电价数据点时出错: {e}", exc_info=True)
         return {"error": str(e)}
     
+def get_main_traiding_hub_today_lmp(market=None, location=None):
+    """
+    获取当日主干电网电价
+    """
+    try:
+        if market is None or location is None:
+            return {"error": "必须提供 market 和 location 参数"}
+        
+        lmp_df = caiso.get_lmp(date="today", market=market, locations=[location])
+        if lmp_df is None or lmp_df.empty:
+            return {"error": "No LMP data available"}
+        
+        # 转换时间格式
+        lmp_df['Time'] = pd.to_datetime(lmp_df['Time'])
+        lmp_df['time_str'] = lmp_df['Time'].dt.strftime('%H:%M')
+
+        data_to_return = {
+            location: {
+                "time": lmp_df['time_str'].tolist(),
+                "value": lmp_df['LMP'].tolist()
+            }
+        }
+
+        return data_to_return
+    except Exception as e:
+        return {"error": str(e)}
+    
 def get_main_traiding_hub_history_lmp(date=None, market=None, location=None):
     """
     根据指定日期和市场获取指定主干电网的历史电价数据。
@@ -319,6 +346,9 @@ def get_main_traiding_hub_history_lmp(date=None, market=None, location=None):
         app.logger.error(f"获取历史电价数据 ({date}, {location}) 时出错: {e}", exc_info=True)
         return {"error": str(e)}
 
+# --------------------------------------------------------------------------
+# 获取地区电网电价的函数
+# --------------------------------------------------------------------------
 
 def get_all_apnode_history_lmp(date=None, market=None):
     """
@@ -361,8 +391,147 @@ def get_all_apnode_history_lmp(date=None, market=None):
         return {"error": str(e)}
 
 # --------------------------------------------------------------------------
+# 能源组合数据
+# --------------------------------------------------------------------------
+
+def get_fuel_mix_latest_data_point():
+    """获取最新的单个燃料组合数据点。"""
+    try:
+        app.logger.debug("正在获取最新的燃料组合数据点...")
+        fuel_mix_df = caiso.get_fuel_mix(date='latest')
+        if fuel_mix_df is None or fuel_mix_df.empty:
+            app.logger.warning("未获取到燃料组合数据。")
+            return {"error": "No fuel mix data available"}
+        
+        energy_types = [
+            "Solar", "Wind", "Geothermal", "Biomass", "Biogas", "Small Hydro",
+            "Coal", "Nuclear", "Natural Gas", "Large Hydro", "Batteries", "Imports", "Other"
+        ]
+        # 获取最后一条记录，即最新的数据点
+        latest_record = fuel_mix_df.iloc[-1]
+        dt = pd.to_datetime(latest_record['Time']).strftime('%H:%M')
+        data_to_return = {
+            "time": dt,
+            "solar": latest_record["Solar"],
+            "wind": latest_record["Wind"],
+            "geothermal": latest_record["Geothermal"],
+            "biomass": latest_record["Biomass"],
+            "biogas": latest_record["Biogas"],  
+            "small_hydro": latest_record["Small Hydro"],
+            "coal": latest_record["Coal"],
+            "nuclear": latest_record["Nuclear"],
+            "natural_gas": latest_record["Natural Gas"],
+            "large_hydro": latest_record["Large Hydro"],
+            "batteries": latest_record["Batteries"],
+            "imports": latest_record["Imports"],
+            "other": latest_record["Other"]
+        }
+        app.logger.info(f"成功获取最新燃料组合数据点: 时间 {dt}")
+        return data_to_return
+    except Exception as e:
+        app.logger.error(f"获取最新燃料组合数据点时出错: {e}", exc_info=True)
+        return {"error": str(e)}
+    
+
+def get_fuel_mix_today():
+    """获取今日的燃料组合数据，并按能源类型分类返回。"""
+    try:
+        app.logger.debug("正在获取今日燃料组合数据...")
+        fuel_mix_df = caiso.get_fuel_mix(date="today")
+        if fuel_mix_df is None or fuel_mix_df.empty:
+            app.logger.warning("未获取到今日燃料组合数据。")
+            return {"error": "No fuel mix data available"}
+        
+        # 预先处理时间列，转换为 'HH:MM' 格式的字符串列表
+        fuel_mix_df['Time'] = pd.to_datetime(fuel_mix_df['Time'])
+        time_list = fuel_mix_df['Time'].dt.strftime('%H:%M').tolist()
+
+        energy_types = [
+        "Solar", "Wind", "Geothermal", "Biomass", "Biogas", "Small Hydro",
+        "Coal", "Nuclear", "Natural Gas", "Large Hydro", "Batteries", "Imports", "Other"
+        ]
+
+        data_to_return = {}
+        # 遍历每一种能源类型
+        for energy in energy_types:
+            # 检查能源类型是否存在于DataFrame的列中
+            if energy in fuel_mix_df.columns:
+                # 为该能源类型创建一个包含时间和数值列表的字典
+                data_to_return[energy] = {
+                    "time": time_list,
+                    "value": fuel_mix_df[energy].tolist()
+                }
+        app.logger.info("成功获取并分类了今日的燃料组合数据。")
+        return data_to_return
+    except Exception as e:
+        app.logger.error(f"获取今日燃料组合数据时出错: {e}", exc_info=True)
+        return {"error": str(e)}
+
+def get_fuel_mix_history(date=None):
+    """根据指定日期获取历史燃料组合数据。"""
+    try:
+        if date is None:
+            app.logger.warning("get_fuel_mix_history 缺少日期参数。")
+            return {"error": "必须提供日期参数"}
+        
+        app.logger.debug(f"正在获取 {date} 的燃料组合数据...")
+        fuel_mix_df = caiso.get_fuel_mix(date)
+        if fuel_mix_df is None or fuel_mix_df.empty:
+            app.logger.warning(f"在 {date} 未找到任何燃料组合数据。")
+            return {"error": "No fuel mix data available"}
+        
+        # 预先处理时间列，转换为 'HH:MM' 格式的字符串列表
+        fuel_mix_df['Time'] = pd.to_datetime(fuel_mix_df['Time'])
+        time_list = fuel_mix_df['Time'].dt.strftime('%H:%M').tolist()
+
+        # 定义需要提取的能源类型
+        energy_types = [
+            "Solar", "Wind", "Geothermal", "Biomass", "Biogas", "Small Hydro",
+            "Coal", "Nuclear", "Natural Gas", "Large Hydro", "Batteries", "Imports", "Other"
+        ]
+
+        data_to_return = {}
+        # 遍历每一种能源类型
+        for energy in energy_types:
+            # 检查能源类型是否存在于DataFrame的列中
+            if energy in fuel_mix_df.columns:
+                # 为该能源类型创建一个包含时间和数值列表的字典
+                data_to_return[energy] = {
+                    "time": time_list,
+                    "value": fuel_mix_df[energy].tolist()
+                }
+        
+        app.logger.info(f"成功获取了 {date} 的燃料组合数据。")
+        return data_to_return
+    except Exception as e:
+        app.logger.error(f"获取燃料组合数据 ({date}) 时出错: {e}", exc_info=True)
+        return {"error": str(e)}
+
+# --------------------------------------------------------------------------
 # 太阳能和风能
 # --------------------------------------------------------------------------
+
+def get_curtailed_non_operational_generator_report(date=None):
+    try:
+        if date is None:
+            app.logger.warning("get_curtailed_non_operational_generator_report 缺少日期参数。")
+            return {"error": "必须提供日期参数"}
+        df = caiso.get_curtailed_non_operational_generator_report(date=date)
+        if df is None or df.empty:
+            app.logger.warning(f"在 {date} 未找到任何非运行发电机的弃风弃光数据。")
+            return {"error": "No data available"}
+        df['Time'] = pd.to_datetime(df['Time'])
+        data_to_return = {
+            "time": df['Time'].dt.strftime('%H:%M').tolist(),
+            "curtailment": df['Curtailment'].tolist(),
+            "non_operational": df['Non-Operational'].tolist()
+        }
+        app.logger.info(f"成功获取了 {date} 的弃风弃光数据。")
+        return data_to_return
+    except Exception as e:
+        app.logger.error(f"获取弃风弃光数据 ({date}) 时出错: {e}", exc_info=True)
+        return {"error": str(e)}
+
 
 # --------------------------------------------------------------------------
 # 功能函数
@@ -519,6 +688,25 @@ def api_history_all_nodes_lmp():
     else: return jsonify({"error": "无效的 market 参数"}), 400
 
     data = get_all_apnode_history_lmp(date=date_param, market=market_enum)
+    return jsonify(data)
+
+# --- 燃料组合 API ---
+@app.route('/api/fuel_mix/today')
+def api_get_fuel_mix_today():
+    """提供今日燃料组合数据的API端点。"""
+    app.logger.info("API请求: /api/fuel_mix/today")
+    data = get_fuel_mix_today()
+    return jsonify(data)
+
+# --- 历史燃料组合 API ---
+@app.route('/api/fuel_mix/history')
+def api_get_fuel_mix_history():
+    """提供历史燃料组合数据的API端点。"""
+    date_param = request.args.get('date')
+    app.logger.info(f"API请求: /api/fuel_mix/history, 日期: {date_param}")
+    if not date_param:
+        return jsonify({"error": "必须提供日期参数"}), 400
+    data = get_fuel_mix_history(date_param)
     return jsonify(data)
 
 # --------------------------------------------------------------------------
