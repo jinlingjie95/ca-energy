@@ -263,6 +263,40 @@ def get_fuel_mix_data(date):
         return {"error": "Server error while fetching fuel mix data."}
 
 
+# --- 太阳能和风能预测 (Solar and Wind Forecast) ---
+
+def get_solar_and_wind_forecast(date):
+    """获取指定日期的太阳能和风能日前预测数据"""
+    try:
+        # 调用 gridstatus 函数获取数据
+        forecast_df = caiso.get_solar_and_wind_forecast_dam(date)
+        
+        if forecast_df is None or forecast_df.empty:
+            return {"error": f"No solar and wind forecast data available for {date}"}
+
+        # 数据处理
+        forecast_df['Time'] = pd.to_datetime(forecast_df['Interval Start'])
+        forecast_df['time_str'] = forecast_df['Time'].dt.strftime('%H:%M')
+        
+        # 按 'Location' 分组
+        grouped = forecast_df.groupby('Location')
+        data_to_return = {}
+
+        for name, group in grouped:
+            # 按时间排序
+            sorted_group = group.sort_values(by='Time')
+            data_to_return[name] = {
+                "time": sorted_group['time_str'].tolist(),
+                "solar_mw": sorted_group['Solar MW'].tolist(),
+                "wind_mw": sorted_group['Wind MW'].tolist()
+            }
+            
+        return data_to_return
+    except Exception as e:
+        current_app.logger.error(f"Error fetching solar and wind forecast for {date}: {e}", exc_info=True)
+        return {"error": "Server error while fetching solar and wind forecast data."}
+
+
 # --- 辅助格式化函数 ---
 
 def format_lmp_latest(df):

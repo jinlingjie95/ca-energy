@@ -1,0 +1,363 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+<style>
+    .weather-page-container {
+        max-width: 1200px; /* 适当加宽以容纳更多卡片 */
+        margin: 2rem auto;
+    }
+
+    .card {
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+        padding: 20px;
+        margin-bottom: 25px;
+    }
+    
+    .card-title {
+        font-size: 1.5em;
+        font-weight: 600;
+        margin-top: 0;
+        margin-bottom: 20px;
+        color: #34495e;
+    }
+
+    /* --- 州首府天气卡片网格 --- */
+    #capitalsWeatherGrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 15px;
+    }
+
+    .capital-weather-card {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+        border: 1px solid #e9ecef;
+    }
+
+    .capital-weather-card h4 {
+        margin: 0 0 5px 0;
+        font-size: 1.1em;
+        color: #495057;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .capital-weather-card .temp {
+        font-size: 2em;
+        font-weight: bold;
+        color: #343a40;
+    }
+    
+    .capital-weather-card .temp sup {
+        font-size: 0.5em;
+        vertical-align: top;
+    }
+
+    .capital-weather-card .description {
+        font-size: 0.9em;
+        text-transform: capitalize;
+        color: #6c757d;
+        margin-top: 5px;
+    }
+    
+    /* --- 城市搜索卡片 --- */
+    .search-bar {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 1.5rem;
+    }
+
+    .search-input {
+        flex-grow: 1;
+        padding: 12px;
+        font-size: 1.1em;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+
+    .search-btn {
+        padding: 12px 20px;
+        font-size: 1.1em;
+        border: none;
+        background-color: #007bff;
+        color: white;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+    .search-btn:hover {
+        background-color: #0056b3;
+    }
+    
+    .search-btn:disabled {
+        background-color: #6c757d;
+        cursor: not-allowed;
+    }
+
+    .weather-display-card {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 25px;
+        border: 1px solid #e9ecef;
+        display: none; /* 初始隐藏 */
+    }
+
+    .weather-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 15px;
+        margin-bottom: 15px;
+    }
+
+    .weather-header h2 { margin: 0; font-size: 2em; }
+    .weather-main { display: flex; align-items: center; gap: 20px; }
+    .weather-main .temp { font-size: 4.5em; font-weight: bold; }
+    .weather-main .temp sup { font-size: 0.4em; }
+    .weather-details { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin-top: 20px; }
+    .weather-details p { margin: 5px 0; }
+    
+    /* --- 天气预报图表容器 --- */
+    #forecastChartContainer {
+        margin-top: 25px;
+        padding-top: 25px;
+        border-top: 1px solid #e9ecef;
+        min-height: 350px;
+        display: none; /* 初始隐藏 */
+    }
+</style>
+
+<div class="weather-page-container">
+    <h1 style="text-align: center;">美国天气数据平台</h1>
+
+    <div class="card">
+        <h2 class="card-title">各州首府实时天气</h2>
+        <div id="capitalsWeatherGrid">
+            <p>正在加载各州首府天气数据...</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title">指定城市天气查询</h2>
+        <div class="search-bar">
+            <input type="text" id="citySearchInput" class="search-input" placeholder="例如: New York, Los Angeles...">
+            <button id="citySearchBtn" class="search-btn">查询</button>
+        </div>
+        <div id="weatherResult">
+            <p id="message" style="text-align: center;">请输入一个美国城市名进行查询。</p>
+            <div id="weatherCard" class="weather-display-card">
+                <div class="weather-header">
+                    <h2 id="cityName"></h2>
+                    <div>
+                        <img id="weatherIcon" src="" alt="Weather icon">
+                        <p id="weatherDesc" style="text-align: center; margin: 0;"></p>
+                    </div>
+                </div>
+                <div class="weather-main">
+                    <div id="weatherTemp" class="temp"></div>
+                </div>
+                <div class="weather-details">
+                    <p><strong>最高温度:</strong> <span id="tempMax"></span></p>
+                    <p><strong>最低温度:</strong> <span id="tempMin"></span></p>
+                    <p><strong>湿度:</strong> <span id="humidity"></span></p>
+                    <p><strong>风速:</strong> <span id="windSpeed"></span> m/s</p>
+                </div>
+                <div id="forecastChartContainer">
+                    <canvas id="hourlyForecastChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const API_BASE_URL = '/api/weather';
+
+    // --- 州首府天气 ---
+    const capitalsGrid = document.getElementById('capitalsWeatherGrid');
+    
+    async function fetchCapitalsWeather() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/state_capitals`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || '获取数据失败');
+            
+            displayCapitals(data.capitals);
+
+        } catch (error) {
+            capitalsGrid.innerHTML = `<p style="color: red;">加载州首府天气失败: ${error.message}</p>`;
+            console.error('Fetch capitals weather error:', error);
+        }
+    }
+
+    function displayCapitals(capitals) {
+        capitalsGrid.innerHTML = '';
+        if (!capitals || capitals.length === 0) {
+            capitalsGrid.innerHTML = '<p>未获取到州首府天气数据。</p>';
+            return;
+        }
+        capitals.forEach(city => {
+            const card = document.createElement('div');
+            card.className = 'capital-weather-card';
+            card.innerHTML = `
+                <h4>${city.city}</h4>
+                <img src="http://openweathermap.org/img/wn/${city.icon}.png" alt="${city.description}">
+                <div class="temp">${city.temp}<sup>°C</sup></div>
+                <p class="description">${city.description}</p>
+            `;
+            capitalsGrid.appendChild(card);
+        });
+    }
+
+    // --- 城市搜索 ---
+    const searchInput = document.getElementById('citySearchInput');
+    const searchBtn = document.getElementById('citySearchBtn');
+    const weatherCard = document.getElementById('weatherCard');
+    const message = document.getElementById('message');
+    const forecastContainer = document.getElementById('forecastChartContainer');
+    let forecastChart = null; // 用于存储 Chart.js 实例
+
+    async function fetchCityWeather() {
+        const city = searchInput.value.trim();
+        if (!city) {
+            message.textContent = '请输入城市名。';
+            message.style.color = 'red';
+            weatherCard.style.display = 'none';
+            forecastContainer.style.display = 'none';
+            return;
+        }
+
+        message.textContent = `正在查询 ${city} 的天气...`;
+        message.style.display = 'block';
+        message.style.color = 'black';
+        weatherCard.style.display = 'none';
+        forecastContainer.style.display = 'none';
+        searchBtn.disabled = true;
+        searchBtn.textContent = '查询中...';
+
+        try {
+            // 第1步：获取当前天气
+            const currentResponse = await fetch(`${API_BASE_URL}/city?q=${encodeURIComponent(city)}`);
+            const currentData = await currentResponse.json();
+            if (!currentResponse.ok) throw new Error(currentData.error || '获取当前天气失败');
+            
+            displayCityWeather(currentData);
+            message.style.display = 'none';
+
+            // 第2步：获取小时预报数据
+            await fetchAndDisplayHourlyForecast(city);
+
+        } catch (error) {
+            message.textContent = `查询失败: ${error.message}`;
+            message.style.display = 'block';
+            message.style.color = 'red';
+        } finally {
+            searchBtn.disabled = false;
+            searchBtn.textContent = '查询';
+        }
+    }
+    
+    function displayCityWeather(data) {
+        document.getElementById('cityName').textContent = `${data.city}, ${data.country}`;
+        document.getElementById('weatherIcon').src = `http://openweathermap.org/img/wn/${data.icon}@2x.png`;
+        document.getElementById('weatherDesc').textContent = data.description;
+        document.getElementById('weatherTemp').innerHTML = `${data.temp}<sup>°C</sup>`;
+        document.getElementById('tempMax').textContent = `${data.temp_max}°C`;
+        document.getElementById('tempMin').textContent = `${data.temp_min}°C`;
+        document.getElementById('humidity').textContent = `${data.humidity}%`;
+        document.getElementById('windSpeed').textContent = data.wind_speed;
+        weatherCard.style.display = 'block';
+    }
+
+    async function fetchAndDisplayHourlyForecast(city) {
+        const forecastResponse = await fetch(`${API_BASE_URL}/forecast/hourly?q=${encodeURIComponent(city)}`);
+        const forecastData = await forecastResponse.json();
+        if (!forecastResponse.ok) {
+            console.error("获取小时预报失败:", forecastData.error);
+            forecastContainer.style.display = 'none'; // 如果失败则隐藏图表区
+            return;
+        }
+
+        const labels = forecastData.forecasts.map(f => new Date(f.time.replace(" ", "T"))); // 格式化时间
+        const temps = forecastData.forecasts.map(f => f.temp);
+
+        const chartData = {
+            labels: labels,
+            datasets: [{
+                label: '温度 (°C)',
+                data: temps,
+                borderColor: '#007bff',
+                backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                fill: true,
+                tension: 0.3
+            }]
+        };
+
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'hour',
+                        tooltipFormat: 'yyyy-MM-dd HH:mm',
+                        displayFormats: {
+                            hour: 'HH:mm'
+                        }
+                    },
+                    title: { display: true, text: '时间 (未来24小时)' }
+                },
+                y: {
+                    title: { display: true, text: '温度 (°C)' }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        // 在提示框中添加更多信息
+                        footer: function(tooltipItems) {
+                            const index = tooltipItems[0].dataIndex;
+                            const forecast = forecastData.forecasts[index];
+                            return [
+                                `湿度: ${forecast.humidity}%`,
+                                `风速: ${forecast.wind_speed} m/s`,
+                                `天气: ${forecast.description}`
+                            ];
+                        }
+                    }
+                }
+            }
+        };
+
+        if (forecastChart) {
+            forecastChart.destroy(); // 如果图表已存在，先销毁
+        }
+        
+        forecastContainer.style.display = 'block'; // 显示图表容器
+        const ctx = document.getElementById('hourlyForecastChart').getContext('2d');
+        forecastChart = new Chart(ctx, { type: 'line', data: chartData, options: chartOptions });
+    }
+    
+    // --- 初始化 ---
+    searchBtn.addEventListener('click', fetchCityWeather);
+    searchInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') fetchCityWeather();
+    });
+
+    fetchCapitalsWeather(); // 页面加载时自动获取州首府天气
+});
+</script>
+
+{% endblock %}

@@ -17,10 +17,12 @@ def create_app(config_class=Config):
 
     from app.api.ca.routes import bp as ca_api_bp
     app.register_blueprint(ca_api_bp, url_prefix='/api/ca')
-    
-    # 在这里可以继续注册其他地区的蓝图，例如:
-    # from app.api.tx.routes import bp as tx_api_bp
-    # app.register_blueprint(tx_api_bp, url_prefix='/api/tx')
+
+    from app.api.weather.routes import bp as weather_api_bp
+    app.register_blueprint(weather_api_bp, url_prefix='/api/weather')
+
+    from app.api.fire.routes import bp as fire_api_bp
+    app.register_blueprint(fire_api_bp, url_prefix='/api/fire')
 
     # 配置日志
     if not app.debug and not app.testing:

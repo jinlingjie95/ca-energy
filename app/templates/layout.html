@@ -14,6 +14,8 @@
     <nav class="navbar">
         <a href="{{ url_for('main.index') }}" class="nav-brand">主页</a>
         <a href="{{ url_for('main.ca_page') }}" class="nav-link">查看加州电力数据</a>
+        <a href="{{ url_for('main.weather_page') }}" class="nav-link">天气查询</a> 
+        <a href="{{ url_for('main.fire_page') }}" class="nav-link">山火信息</a> 
     </nav>
     <div class="container">
         {% block content %}{% endblock %}

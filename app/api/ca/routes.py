@@ -39,6 +39,14 @@ def api_load_forecast():
     data = data_fetcher.get_load_forecast(date, option)
     return jsonify(data)
 
+@bp.route('/load/forecast/today', methods=['GET'])
+def api_load_forecast_today():
+    """API: 获取今日日前负荷预测数据"""
+    current_app.logger.info(f"API request: /api/ca/load/forecast/today")
+    # 直接调用 data_fetcher 获取今天的 'hourly' 预测
+    data = data_fetcher.get_load_forecast('today', 'hourly')
+    return jsonify(data)
+
 # --- 储能数据 API (Storage API) ---
 
 @bp.route('/storage/latest', methods=['GET'])
@@ -134,4 +142,17 @@ def api_get_fuel_mix_history():
     if not date:
         return jsonify({"error": "Date parameter is required"}), 400
     data = data_fetcher.get_fuel_mix_data(date)
+    return jsonify(data)
+
+# --- 太阳能和风能预测 API (Solar and Wind Forecast API) ---
+
+@bp.route('/forecast/solar_and_wind', methods=['GET'])
+def api_solar_and_wind_forecast():
+    """API: 获取太阳能和风能的日前预测数据"""
+    date = request.args.get('date')
+    current_app.logger.info(f"API request: /api/ca/forecast/solar_and_wind?date={date}")
+    if not date:
+        return jsonify({"error": "Date parameter is required"}), 400
+    
+    data = data_fetcher.get_solar_and_wind_forecast(date)
     return jsonify(data)

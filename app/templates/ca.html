@@ -288,6 +288,22 @@
             border-radius: 4px;
             box-sizing: border-box;
         }
+
+         /* --- 太阳能和风能图表布局 --- */
+        #todaySolarWindChartsContainer .col,
+        #historySolarWindChartsContainer .col {
+            flex-grow: 0;
+            flex-shrink: 0;
+            flex-basis: calc(50% - 12.5px); /* 50% 宽度减去一半的间隙 */
+        }
+
+        @media (max-width: 992px) {
+            #todaySolarWindChartsContainer .col,
+            #historySolarWindChartsContainer .col {
+                flex-basis: 100%; /* 在小屏幕上占满整行 */
+            }
+        }
+
     </style>
 </head>
 
@@ -421,6 +437,29 @@
                     </div>
                     <p id="historyFuelMixError" class="error-message"></p>
                     <div class="chart-container"><canvas id="historyFuelMixChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">太阳能与风能日前预测</h2>
+            
+            <div id="today-forecast-section">
+                <h3 style="border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px;">今日数据 (明日预测)</h3>
+                <div class="row" id="todaySolarWindChartsContainer">
+                    <p>加载中...</p>
+                </div>
+            </div>
+
+            <div id="history-forecast-section" style="margin-top: 40px;">
+                <h3 style="border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px;">历史数据查询</h3>
+                <div class="controls">
+                    <label for="historySolarWindDateInput" style="font-weight: bold;">查询日期:</label>
+                    <input type="date" id="historySolarWindDateInput" class="date-input">
+                    <button id="fetchHistorySolarWindButton" class="btn">查询历史数据</button>
+                </div>
+                <p id="historySolarWindError" class="error-message"></p>
+                <div class="row" id="historySolarWindChartsContainer">
                 </div>
             </div>
         </div>
@@ -588,7 +627,28 @@
                     init: function () {
                         this.chart = utils.createChart('realtimeLoadChart', {
                             type: 'line',
-                            data: { datasets: [{ label: '实时负荷', data: [], borderColor: 'rgb(75, 192, 192)', backgroundColor: 'rgba(75, 192, 192, 0.2)', tension: 0.1, fill: true, borderWidth: 2 }] },
+                            data: {
+                                datasets: [
+                                    { 
+                                        label: '实时负荷', 
+                                        data: [], 
+                                        borderColor: 'rgb(75, 192, 192)', 
+                                        backgroundColor: 'rgba(75, 192, 192, 0.2)', 
+                                        tension: 0.1, 
+                                        fill: true, 
+                                        borderWidth: 2 
+                                    },
+                                    { 
+                                        label: '今日日前预测', 
+                                        data: [], 
+                                        borderColor: 'rgb(255, 99, 132)', 
+                                        borderDash: [5, 5], 
+                                        fill: false, 
+                                        tension: 0.1, 
+                                        borderWidth: 2 
+                                    }
+                                ]
+                            },
                             options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'time', time: { unit: 'hour', tooltipFormat: 'HH:mm' }, title: { display: true, text: '时间' } }, y: { title: { display: true, text: '负荷 (MW)' } } } }
                         });
                         this.update();
@@ -596,11 +656,23 @@
                     },
                     update: async function () {
                         try {
-                            const response = await fetch(`${API_BASE_URL}/load/today`);
-                            const data = await response.json();
-                            if (data.error) return;
                             const todayStr = new Date().toISOString().split('T')[0];
-                            this.chart.data.datasets[0].data = utils.formatChartData(data, todayStr);
+                            // 并行获取实时负荷和预测负荷
+                            const [loadResponse, forecastResponse] = await Promise.all([
+                                fetch(`${API_BASE_URL}/load/today`),
+                                fetch(`${API_BASE_URL}/load/forecast/today`) // 调用新 API
+                            ]);
+
+                            const loadData = await loadResponse.json();
+                            if (!loadData.error) {
+                                this.chart.data.datasets[0].data = utils.formatChartData(loadData, todayStr);
+                            }
+
+                            const forecastData = await forecastResponse.json();
+                            if (!forecastData.error) {
+                                this.chart.data.datasets[1].data = utils.formatChartData(forecastData, todayStr);
+                            }
+
                             this.chart.update('none');
                         } catch (error) { console.error('Failed to update realtime load chart:', error); }
                     }
@@ -1085,6 +1157,147 @@
                 init: function () { this.today.init(this); this.history.init(this); }
             };
 
+
+            // ==========================================================
+            //       太阳能与风能预测图表 (Solar & Wind Forecast)
+            // ==========================================================
+            
+            const solarWindCharts = {
+                // 用于创建单个图表的辅助函数
+                createForecastChart: function(canvasId, title) {
+                    return utils.createChart(canvasId, {
+                        type: 'line',
+                        data: {
+                            labels: [],
+                            datasets: [
+                                { label: '太阳能 (MW)', data: [], borderColor: 'rgb(255, 206, 86)', backgroundColor: 'rgba(255, 206, 86, 0.5)', fill: 'origin', yAxisID: 'y' },
+                                { label: '风能 (MW)', data: [], borderColor: 'rgb(75, 192, 192)', backgroundColor: 'rgba(75, 192, 192, 0.5)', fill: 'origin', yAxisID: 'y' }
+                            ]
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            scales: {
+                                x: { type: 'time', time: { unit: 'hour', tooltipFormat: 'HH:mm' } },
+                                y: { stacked: true, title: { display: true, text: '发电量 (MW)' } }
+                            },
+                            plugins: {
+                                title: { display: true, text: title }
+                            }
+                        }
+                    });
+                },
+
+                // 动态填充图表数据的函数
+                populateCharts: function(container, chartInstances, apiData, dateString) {
+                    container.innerHTML = ''; // 清空容器
+                    chartInstances = {}; // 重置图表实例对象
+
+                    const locations = Object.keys(apiData).sort();
+                    if(locations.length === 0) {
+                        container.innerHTML = '<p>未找到任何地区的数据。</p>';
+                        return;
+                    }
+
+                    for (const location of locations) {
+                        const locationData = apiData[location];
+                        
+                        // 1. 创建HTML结构
+                        const colDiv = document.createElement('div');
+                        colDiv.className = 'col';
+                        const chartContainer = document.createElement('div');
+                        chartContainer.className = 'chart-container';
+                        const canvasId = `${container.id}-${location}`;
+                        chartContainer.innerHTML = `<canvas id="${canvasId}"></canvas>`;
+                        colDiv.appendChild(chartContainer);
+                        container.appendChild(colDiv);
+
+                        // 2. 创建图表实例
+                        const chart = this.createForecastChart(canvasId, `${location} 区域预测`);
+                        chartInstances[location] = chart;
+
+                        // 3. 填充数据
+                        const timeLabels = locationData.time.map(timeStr => {
+                             const [hours, minutes] = timeStr.split(':');
+                             const d = new Date(`${dateString}T00:00:00`);
+                             d.setHours(hours, minutes, 0, 0);
+                             return d;
+                        });
+                        
+                        chart.data.labels = timeLabels;
+                        chart.data.datasets[0].data = locationData.solar_mw;
+                        chart.data.datasets[1].data = locationData.wind_mw;
+                        chart.update();
+                    }
+                },
+
+                today: {
+                    chartInstances: {},
+                    container: document.getElementById('todaySolarWindChartsContainer'),
+                    init: async function (outer) {
+                        try {
+                            // API 使用 'today' 可以获取到明天的预测
+                            const response = await fetch(`${API_BASE_URL}/forecast/solar_and_wind?date=today`);
+                            const data = await response.json();
+                            if (data.error) throw new Error(data.error);
+                            
+                            const tomorrow = new Date();
+                            tomorrow.setDate(tomorrow.getDate() + 1);
+                            const dateString = tomorrow.toISOString().split('T')[0];
+
+                            outer.populateCharts(this.container, this.chartInstances, data, dateString);
+
+                        } catch (error) {
+                            this.container.innerHTML = `<p style="color: red;">加载今日预测数据失败: ${error.message}</p>`;
+                            console.error(error);
+                        }
+                    }
+                },
+                
+                history: {
+                    chartInstances: {},
+                    container: document.getElementById('historySolarWindChartsContainer'),
+                    elements: {
+                        dateInput: document.getElementById('historySolarWindDateInput'),
+                        fetchButton: document.getElementById('fetchHistorySolarWindButton'),
+                        errorMsg: document.getElementById('historySolarWindError'),
+                    },
+                    init: function(outer) {
+                        this.elements.fetchButton.addEventListener('click', () => this.fetchData(outer));
+                        // 默认查询昨天
+                        utils.setDefaultDateToYesterday('historySolarWindDateInput');
+                    },
+                    fetchData: async function(outer) {
+                        const date = this.elements.dateInput.value;
+                        if (!date) {
+                            this.elements.errorMsg.textContent = '请选择一个有效的日期。';
+                            return;
+                        }
+                        this.elements.errorMsg.textContent = '';
+                        utils.toggleButtonLoading(this.elements.fetchButton, true, '查询历史数据');
+                        this.container.innerHTML = '<p>加载中...</p>';
+
+                        try {
+                            const response = await fetch(`${API_BASE_URL}/forecast/solar_and_wind?date=${date}`);
+                            const data = await response.json();
+                            if (data.error) throw new Error(data.error);
+
+                            outer.populateCharts(this.container, this.chartInstances, data, date);
+
+                        } catch (error) {
+                            this.elements.errorMsg.textContent = `获取历史预测数据失败: ${error.message}`;
+                            this.container.innerHTML = '';
+                        } finally {
+                            utils.toggleButtonLoading(this.elements.fetchButton, false, '查询历史数据');
+                        }
+                    }
+                },
+
+                init: function() {
+                    this.today.init(this);
+                    this.history.init(this);
+                }
+            };
+
             /**
              * 主初始化函数
              * 调用所有模块的初始化方法
@@ -1096,6 +1309,7 @@
                 hubLmpCharts.init();
                 nodeLmpCharts.init();
                 fuelMixCharts.init();
+                solarWindCharts.init(); 
             }
 
             // 启动所有功能
